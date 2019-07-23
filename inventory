@@ -1,0 +1,2 @@
+[poc]
+poc_exam_host ansible_host=54.68.158.51 ansible_user=ec2-user

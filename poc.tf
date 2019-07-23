@@ -45,6 +45,10 @@ resource "aws_eip" "poc" {
   vpc = true
   depends_on = ["aws_internet_gateway.poc"]
 }
+resource "aws_key_pair" "bruce" {
+  key_name = "poc_key"
+  public_key = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQChRslC9Y045qKBM23fvzRrY73Ip7eFLqJ+zeCg4DPveloG8ag4W44wFfu0tCwq0w4rOMLOlU6W0QdI87o5zo71F53vKTdr0Nf9nMm/uP+GiH5w93iq4WilcfpHNW63hVA+57FToWWZii0zaeAtUXj0IVNDFEgX+38QfPN0OxABEN8dTSnOepVBMOEFlsv3O/90Z0cGvBZSfKBYNIOvW/OF+t+U2cTyC13aUSEMGZenV0mG6W7aCS6+33mbUg2Twu9eOOb+TIp3yIl5sUHoFnEvBv9hoNwLqQmuijOWS6ep265t9PnoXvscRRn12TQ8PgRs6z9SlbVMlGy0O3PaT6WB"
+}
 
 resource "aws_security_group" "poc_ssh" {
   name = "POC"
@@ -72,6 +76,7 @@ resource "aws_security_group" "poc_ssh" {
 resource "aws_instance" "poc_exam_host" {
   ami = "ami-082b5a644766e0e6f"
   instance_type = "t3.micro"
+  key_name = "poc_key"
 
   network_interface {
     network_interface_id = "${aws_network_interface.poc_exam_host.id}"

@@ -5,3 +5,4 @@ downloads/
 authorized_keys
 
 terraform.tfstate*
+*.retry
