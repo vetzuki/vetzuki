@@ -1,0 +1,7 @@
+.terraform
+.*.swp
+bin/
+downloads/
+authorized_keys
+
+terraform.tfstate*
