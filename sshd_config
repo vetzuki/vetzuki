@@ -1,7 +1,31 @@
-PermitRootLogin without-password
+HostKey /etc/ssh/ssh_host_rsa_key
+HostKey /etc/ssh/ssh_host_ecdsa_key
+HostKey /etc/ssh/ssh_host_ed25519_key
+SyslogFacility AUTHPRIV
+AuthorizedKeysFile .ssh/authorized_keys
+#PasswordAuthentication no
 ChallengeResponseAuthentication no
-UsePAM no
-X11Forwarding no
-PrintMotd yes
-AcceptEnv LANG LC_*
-#Subsystem       sftp    /usr/lib/openssh/sftp-server
+GSSAPIAuthentication yes
+GSSAPICleanupCredentials no
+UsePAM yes
+X11Forwarding yes
+AcceptEnv LANG LC_CTYPE LC_NUMERIC LC_TIME LC_COLLATE LC_MONETARY LC_MESSAGES
+AcceptEnv LC_PAPER LC_NAME LC_ADDRESS LC_TELEPHONE LC_MEASUREMENT
+AcceptEnv LC_IDENTIFICATION LC_ALL LANGUAGE
+AcceptEnv XMODIFIERS
+AuthorizedKeysCommand /opt/aws/bin/eic_run_authorized_keys %u %f
+AuthorizedKeysCommandUser ec2-instance-connect
+
+# Only for ec2-user
+Subsystem sftp  /usr/libexec/openssh/sftp-server
+
+# All but ec2-user
+Match User *,!ec2-user
+  ForceCommand /usr/local/bin/teesh
+  PasswordAuthentication yes
+  AuthenticationMethods password
+
+Match User ec2-user
+  AuthenticationMethods publickey
+  PasswordAuthentication no
+

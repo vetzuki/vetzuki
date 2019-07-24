@@ -1,3 +1,9 @@
 #!/bin/bash
 
-ssh -o "StrictHostKeyChecking=no" root@172.17.0.2 | tee >(ts "%d-%m-%y %H_%M_%S" > /tmp/ssh-$USER-audit.log)
+DOCKER_HOST_IP=172.17.0.2
+LOG_ROOT=/tmp
+
+ssh \
+    -o "StrictHostKeyChecking=no" \
+    root@$DOCKER_HOST_IP \
+    | tee >(ts "%d-%m-%y %H_%M_%S" > $LOG_ROOT/ssh-$USER-audit.log)
