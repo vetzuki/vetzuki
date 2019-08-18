@@ -1,0 +1,54 @@
+#!/bin/bash
+# EXAM_CONTAINER_IP : IP of the Exam container
+# PROSPECT_IP : IP the prospect must bring up
+# PROSPECT_ID : ID of the prospect
+# PROSPECT_VIF : VIF on the net_$PROSPECT_ID bridge network
+# VETZUKI_API : API URL
+# VETZUKI_UI : UI URL
+
+examResult=finish
+apiTemplate=/app/exam_result_template.json
+apiPayload=/tmp/exam_result.json
+proctorIdentity=/app/proctor.id_rsa
+
+ticker=0
+# 3000 ticks is 5 minutes (300 seconds * 10 )
+max_ticks=3000
+until ping -I $PROSPECT_VIF -w1 -t1 -c1 $PROSPECT_IP
+do
+  sleep 0.1
+  ticker=$(($ticker + 1))
+  if [ $ticker -ge $max_ticks ] ; then
+      $examResult=timeExceeded
+      # Leave the loop
+      break
+  fi
+done
+
+# Create an exam result
+sed \
+    -e "s/PROSPECT_ID/$PROSPECT_ID/" \
+    -e "s/examResult/$examResult/" \
+    $apiTemplate > $apiPayload
+
+# Send VetZuki the exam result
+curl -q \
+    -H "accept: application/json" \
+    -d @$apiPayload \
+    "$VETZUKI_API/exam/$PROSPECT_ID"
+
+# Notify the Prospect of the outcome
+if [ $examResult == "timeExceeded" ] ; then
+    ssh -i $proctorIdentity \
+	proctor@$EXAM_CONTAINER_IP \
+	wall "Exam time limit exceeded. See $VETZUKI_UI/$PROSPECT_ID for next steps."
+fi
+
+if [ $examResult == "finish" ] ; then
+    ssh -i $proctorIdentity \
+	proctor@$EXAM_CONTAINER_IP \
+	wall "Exam complete. See $VETZUKI_UI/$PROSPECT_ID for next steps."
+fi
+
+
+# Exit the container
