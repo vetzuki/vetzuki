@@ -1,9 +1,16 @@
 #!/bin/bash
 
-DOCKER_HOST_IP=172.17.0.2
-LOG_ROOT=/tmp
+EXAM_CONTAINER_IP=172.17.0.2
+# EXAM_CONTAINER_IP : IP of the exam container
+# prospectID : PAM shell USER
+prospectID=$USER
+
+logRoot=/$prospectID
+logFile=$logRoot/exam.log
+
+[ -d $logRoot ] || mkdir -p $logRoot
 
 ssh \
     -o "StrictHostKeyChecking=no" \
-    root@$DOCKER_HOST_IP \
-    | tee >(ts "%d-%m-%y %H_%M_%S" > $LOG_ROOT/ssh-$USER-audit.log)
+    root@$EXAM_CONTAINER_IP \
+    | tee >(ts "%d-%m-%y %H_%M_%S" > $logFile)
