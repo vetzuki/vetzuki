@@ -17,3 +17,19 @@ provisionPOC:
 	$(TERRAFORMCMD) apply
 configurePOC:
 	$(ANSIBLE_PLAYBOOKCMD) -i $(ANSIBLE_POC_INVENTORY) $(ANSIBLE_POC_MANIFEST)
+
+# TODO: Version should derive from tag
+buildExamContainer:
+	docker build -t vetzuki.com/exam:0 .
+
+run: runExamContainer
+runExamContainer:
+	docker run -d --name exam vetzuki.com/exam:0
+
+clean: docker-kill docker-rm
+
+docker-kill:
+	docker kill exam
+	
+docker-rm:
+	docker rm exam
