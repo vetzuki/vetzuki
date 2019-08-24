@@ -19,12 +19,18 @@ configurePOC:
 	$(ANSIBLE_PLAYBOOKCMD) -i $(ANSIBLE_POC_INVENTORY) $(ANSIBLE_POC_MANIFEST)
 
 # TODO: Version should derive from tag
-buildExamContainer:
+examContainer:
 	docker build -t vetzuki.com/exam:0 .
 
-run: runExamContainer
+proctorContainer:
+	docker build -t vetzuki.com/proctor:0 .
+
+run: runExamContainer 
 runExamContainer:
 	docker run -d --name exam vetzuki.com/exam:0
+
+runProctorContainer:
+	docker run -d --name proctor vetzuki.com/proctor:0
 
 clean: docker-kill docker-rm
 

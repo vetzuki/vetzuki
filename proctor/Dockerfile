@@ -1,18 +1,11 @@
 # Exam image
 FROM ubuntu:latest
 
-RUN apt update && apt dist-upgrade -y && apt install -y openssh-server iproute2 net-tools
-ADD docker-entrypoint.sh /usr/local/bin/
-ADD exam_sshd_config /etc/ssh/sshd_config
-RUN rm -rf /etc/ssh/ssh_host_rsa_key /etc/ssh/ssh_host_dsa_key
+RUN apt update && apt dist-upgrade -y && apt install -y openssh-server iproute2 net-tools curl bash
 
-RUN mkdir /root/.ssh
-ADD exam_container_rsa.pub /root/.ssh/authorized_keys
-RUN chmod 0700 /root/.ssh && chmod 0664 /root/.ssh/authorized_keys
 
-# Add proctor user
-RUN useradd -ms /bin/bash proctor
+RUN mkdir /app
+ADD ping_monitor /app
 
-EXPOSE 22
-ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
-CMD ["/usr/sbin/sshd", "-D"]
+ENTRYPOINT ["/app/ping_monitor"]
+CMD ["/app/ping_monitor"]
