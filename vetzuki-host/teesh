@@ -1,16 +1,124 @@
 #!/bin/bash
 
-EXAM_CONTAINER_IP=172.17.0.2
+# APP_ROOT : Base directory for prospect configurations
 # EXAM_CONTAINER_IP : IP of the exam container
+# bridgeName : Bridge hosting the prospect environment
+# configRoot : Root of configuration data for the prospect environment
+# examImage : Version of the exam image to run
+# examContainerName : Exam container name
+# proctorImage : Version of the proctor image to run
+# proctorContainerName : Proctor container name
+# proctorPublic/PrivateKey : Key pair the proctor uses to connect to the exam container
 # prospectID : PAM shell USER
+# prospectPublic/PrivateKey : Key pair the host uses to connect to the exam container
+
+APP_ROOT=/vetZuki
+# Vetzuki configuration
 prospectID=$USER
+configRoot=$APP_ROOT/$prospectID
+examImage=vetzuki.com/exam:0
+proctorImage=vetzuki.com/proctor:0
+combinedPublicKeys=authorized_keys
+vetzukiAPI=https://vetzuki.com/api
+vetzukiUI=https://vetzuki.com/
+# Key configuration
+proctorPrivateKey=proctor_rsa_$prospectID
+proctorPublicKey=$proctorPrivateKey.pub
+prospectPrivateKey=prospect_rsa_$prospectID
+prospectPublicKey=$prospectPrivateKey.pub
+# Container name configuration
+examContainerName=exam_$prospectID
+proctorContainerName=proctor_$prospectID
 
-logRoot=/$prospectID
+# Bridge configuration
+# TODO: Use IP and port assigner
+bridgeName=prospect_$prospectID
+bridgeNetwork=10.0.1.0/24
+bridgeGateway=10.0.1.1
+proctorContainerIP=10.0.1.222
+examContainerIP=10.0.1.2
+examContainerSSHPort=2022
+assignmentIP=10.0.1.5/24
+
+set -e
+# Kill any existing containers and networks
+if [[ -n $(docker ps --filter "name=$examContainerName" | grep -v CONTAINER) ]] ; then
+  docker kill $examContainerName
+  docker rm $examContainerName
+fi
+
+if [[ -n $(docker ps --filter "name=$proctorContainerName" | grep -v CONTAINER) ]] ; then
+  docker kill $proctorContainerName
+  docker rm $proctorContainerName
+fi
+if [[ $(docker network ls | grep $bridgeName) ]] ; then
+  docker network rm $bridgeName
+fi
+
+# Create prospect configuration root
+[ -d $configRoot ] && rm -rf $configRoot
+mkdir -p $configRoot
+cd $configRoot
+# Create the POC assigment
+echo "Assign the IP $assignmentIP to the eth0 interface" > assignment
+# Create prospect key pair
+ssh-keygen -b 2048 -t rsa -f $prospectPrivateKey -q -N ""
+# Create proctor key pair
+ssh-keygen -b 2048 -t rsa -f $proctorPrivateKey -q -N ""
+# Authorize the prospect and proctor to the exam container
+cat $prospectPublicKey > $combinedPublicKeys
+cat $proctorPublicKey >> $combinedPublicKeys
+
+# Create bridge for prospect containers
+echo "Creating bridge network $bridgeName"
+docker network create \
+    -d bridge \
+    --subnet $bridgeNetwork \
+    --gateway $bridgeGateway \
+    -o "com.docker.network.bridge.name"="$bridgeName" \
+    $bridgeName
+
+[ -f $configRoot/$combinedPublicKeys ] && echo "Authorized keys are ready"
+[ -f $configRoot/assignment ] && echo "Assignment is ready"
+# Create the exam container
+echo "Creating prospect exam $examContainerName using $examImage"
+docker run -d \
+    --name $examContainerName \
+    --mount type=bind,source=$configRoot/$combinedPublicKeys,destination=/root/.ssh/authorized_keys,readonly=true \
+    --mount type=bind,source=$configRoot/assignment,destination=/etc/motd,readonly=true \
+    --network $bridgeName \
+    --ip $examContainerIP \
+    --publish 127.0.0.1:$examContainerSSHPort:22/tcp \
+    $examImage
+
+# Create the proctor container
+echo "Create proctor $proctorContainerName using $proctorImage"
+docker run -d \
+    --name $proctorContainerName \
+    --mount type=bind,source=$configRoot/$proctorPrivateKey,destination=/app/id_rsa,readonly=true \
+    -e EXAM_CONTAINER_IP=$examContainerIP \
+    -e ASSIGNMENT_IP=$assignmentIP \
+    -e PROSPECT_ID=$prospectID \
+    -e PROSPECT_VIF=eth0 \
+    -e VETZUKI_API=$vetzukiAPI \
+    -e VETZUKI_UI=$vetzukiUI \
+    --ip $proctorContainerIP \
+    $proctorImage
+
+logRoot=$configRoot
 logFile=$logRoot/exam.log
-
-[ -d $logRoot ] || mkdir -p $logRoot
-
+echo "Tunneling $prospect to their exam container 127.0.0.1:$examContainerSSHPort"
 ssh \
     -o "StrictHostKeyChecking=no" \
-    root@$EXAM_CONTAINER_IP \
+    -p $examContainerSSHPort \
+    -i $prospectPrivateKey \
+    root@127.0.0.1 \
     | tee >(ts "%d-%m-%y %H_%M_%S" > $logFile)
+
+# Clean-up the environment when things the exam container exits
+if [[ -n $(docker ps --filter "name=$examContainerName" | grep -v CONTAINER) ]] ; then
+  docker kill $examContainerName
+fi
+docker rm $examContainerName
+docker rm $proctorContainerName
+docker network rm $bridgeName
