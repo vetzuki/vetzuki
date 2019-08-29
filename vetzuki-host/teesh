@@ -44,16 +44,23 @@ set -e
 # Kill any existing containers and networks
 if [[ -n $(docker ps --filter "name=$examContainerName" | grep -v CONTAINER) ]] ; then
   docker kill $examContainerName
+fi
+if [[ -n $(docker ps -a --filter "name=$examContainerName" | grep -v CONTAINER) ]] ; then
   docker rm $examContainerName
 fi
 
 if [[ -n $(docker ps --filter "name=$proctorContainerName" | grep -v CONTAINER) ]] ; then
   docker kill $proctorContainerName
+fi
+if [[ -n $(docker ps -a --filter "name=$proctorContainerName" | grep -v CONTAINER) ]] ; then
   docker rm $proctorContainerName
 fi
 if [[ $(docker network ls | grep $bridgeName) ]] ; then
   docker network rm $bridgeName
 fi
+# Authenticate to ECR
+#   This utilizes an IAM ECR ReadOnly role assigned to an EC2 instance
+$(aws ecr get-login --no-include-email --region us-west-2)
 
 # Create prospect configuration root
 [ -d $configRoot ] && rm -rf $configRoot
@@ -89,7 +96,7 @@ docker run -d \
     --ip $examContainerIP \
     --publish 127.0.0.1:$examContainerSSHPort:22/tcp \
     $examImage
-
+echo -e "Launched prospect exam $examContainerName using $examImage\n"
 # Create the proctor container
 echo "Create proctor $proctorContainerName using $proctorImage"
 docker run -d \
@@ -101,12 +108,13 @@ docker run -d \
     -e PROSPECT_VIF=eth0 \
     -e VETZUKI_API=$vetzukiAPI \
     -e VETZUKI_UI=$vetzukiUI \
+    --network $bridgeName \
     --ip $proctorContainerIP \
     $proctorImage
-
+echo -e "Launched proctor $proctorContainerName using $proctorImage\n"
 logRoot=$configRoot
 logFile=$logRoot/exam.log
-echo "Tunneling $prospect to their exam container 127.0.0.1:$examContainerSSHPort"
+echo "Tunneling $prospect to their exam container 127.0.0.1:$examContainerSSHPort using $prospectPrivateKey"
 ssh \
     -o "StrictHostKeyChecking=no" \
     -p $examContainerSSHPort \
