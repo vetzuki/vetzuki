@@ -16,8 +16,8 @@ APP_ROOT=/vetZuki
 # Vetzuki configuration
 prospectID=$USER
 configRoot=$APP_ROOT/$prospectID
-examImage=vetzuki.com/exam:0
-proctorImage=vetzuki.com/proctor:0
+examImage=588487667149.dkr.ecr.us-west-2.amazonaws.com/vetzuki-exam:0
+proctorImage=588487667149.dkr.ecr.us-west-2.amazonaws.com/vetzuki-proctor:0
 combinedPublicKeys=authorized_keys
 vetzukiAPI=https://vetzuki.com/api
 vetzukiUI=https://vetzuki.com/
@@ -75,7 +75,6 @@ docker network create \
     -d bridge \
     --subnet $bridgeNetwork \
     --gateway $bridgeGateway \
-    -o "com.docker.network.bridge.name"="$bridgeName" \
     $bridgeName
 
 [ -f $configRoot/$combinedPublicKeys ] && echo "Authorized keys are ready"
