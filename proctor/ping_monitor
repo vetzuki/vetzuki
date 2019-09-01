@@ -40,15 +40,23 @@ curl -q \
 # Notify the Prospect of the outcome
 if [ $examResult == "timeExceeded" ] ; then
     ssh -i $proctorIdentity \
-	proctor@$EXAM_CONTAINER_IP \
+    -o "StrictHostKeyChecking=no" \
+	root@$EXAM_CONTAINER_IP \
 	wall "Exam time limit exceeded. See $VETZUKI_UI/$PROSPECT_ID for next steps."
 fi
 
 if [ $examResult == "finish" ] ; then
     ssh -i $proctorIdentity \
-	proctor@$EXAM_CONTAINER_IP \
+    -o "StrictHostKeyChecking=no" \
+	root@$EXAM_CONTAINER_IP \
 	wall "Exam complete. See $VETZUKI_UI/$PROSPECT_ID for next steps."
 fi
-
+sleep 5
+ssh -i $proctorIdentity \
+    -o "StrictHostKeyChecking=no" \
+    root@$EXAM_CONTAINER_IP wall "Test will now exit..."
+ssh -i $proctorIdentity \
+    -o "StrictHostKeyChecking=no" \
+    root@$EXAM_CONTAINER_IP kill 1
 
 # Exit the container

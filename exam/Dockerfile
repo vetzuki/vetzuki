@@ -8,7 +8,7 @@ RUN rm -rf /etc/ssh/ssh_host_rsa_key /etc/ssh/ssh_host_dsa_key
 
 RUN mkdir /root/.ssh
 ADD rsa.pub /root/.ssh/authorized_keys
-RUN chmod 0700 /root/.ssh && chmod 0664 /root/.ssh/authorized_keys
+RUN chmod 0700 /root/.ssh && chmod 0600 /root/.ssh/authorized_keys
 
 # Add proctor user
 RUN useradd -ms /bin/bash proctor

@@ -1,7 +1,7 @@
 # Exam image
 FROM ubuntu:latest
 
-RUN apt update && apt dist-upgrade -y && apt install -y openssh-server iproute2 net-tools curl bash
+RUN apt update && apt dist-upgrade -y && apt install -y openssh-server iproute2 net-tools curl bash iputils-ping
 
 
 RUN mkdir /app

@@ -39,6 +39,7 @@ proctorContainerIP=10.0.1.222
 examContainerIP=10.0.1.2
 examContainerSSHPort=2022
 assignmentIP=10.0.1.5/24
+prospectIP=10.0.1.5
 
 set -e
 # Kill any existing containers and networks
@@ -76,6 +77,12 @@ ssh-keygen -b 2048 -t rsa -f $proctorPrivateKey -q -N ""
 cat $prospectPublicKey > $combinedPublicKeys
 cat $proctorPublicKey >> $combinedPublicKeys
 
+chmod 0600 $prospectPrivateKey
+chmod 0600 $proctorPrivateKey
+chmod 0600 $combinedPublicKeys
+# Own all resources as root
+/usr/local/bin/own_config $configRoot
+
 # Create bridge for prospect containers
 echo "Creating bridge network $bridgeName"
 docker network create \
@@ -88,12 +95,14 @@ docker network create \
 [ -f $configRoot/assignment ] && echo "Assignment is ready"
 # Create the exam container
 echo "Creating prospect exam $examContainerName using $examImage"
+# Add NET_ADMIN capability to allow the assignment of IP addresses
 docker run -d \
     --name $examContainerName \
-    --mount type=bind,source=$configRoot/$combinedPublicKeys,destination=/root/.ssh/authorized_keys,readonly=true \
-    --mount type=bind,source=$configRoot/assignment,destination=/etc/motd,readonly=true \
+    --volume $configRoot/$combinedPublicKeys:/root/.ssh/authorized_keys:ro \
+    --volume $configRoot/assignment:/etc/motd:ro \
     --network $bridgeName \
     --ip $examContainerIP \
+    --cap-add=NET_ADMIN \
     --publish 127.0.0.1:$examContainerSSHPort:22/tcp \
     $examImage
 echo -e "Launched prospect exam $examContainerName using $examImage\n"
@@ -101,9 +110,11 @@ echo -e "Launched prospect exam $examContainerName using $examImage\n"
 echo "Create proctor $proctorContainerName using $proctorImage"
 docker run -d \
     --name $proctorContainerName \
-    --mount type=bind,source=$configRoot/$proctorPrivateKey,destination=/app/id_rsa,readonly=true \
+    --volume $configRoot/$proctorPrivateKey:/app/id_rsa:ro \
+    --volume $configRoot/$proctorPrivateKey:/app/proctor.id_rsa:ro \
     -e EXAM_CONTAINER_IP=$examContainerIP \
     -e ASSIGNMENT_IP=$assignmentIP \
+    -e PROSPECT_IP=$prospectIP \
     -e PROSPECT_ID=$prospectID \
     -e PROSPECT_VIF=eth0 \
     -e VETZUKI_API=$vetzukiAPI \
@@ -122,10 +133,15 @@ ssh \
     root@127.0.0.1 \
     | tee >(ts "%d-%m-%y %H_%M_%S" > $logFile)
 
+# Allow command failures
+set +e
 # Clean-up the environment when things the exam container exits
 if [[ -n $(docker ps --filter "name=$examContainerName" | grep -v CONTAINER) ]] ; then
   docker kill $examContainerName
+  docker rm $examContainerName
 fi
-docker rm $examContainerName
-docker rm $proctorContainerName
+if [[ -n $(docker ps --filter "name=$proctorContainerName" | grep -v CONTAINER) ]] ; then
+  docker kill $proctorContainerName
+  docker rm $proctorContainerName
+fi
 docker network rm $bridgeName

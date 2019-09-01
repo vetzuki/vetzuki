@@ -6,3 +6,6 @@ authorized_keys
 
 terraform.tfstate*
 *.retry
+
+# binaries
+own_config
