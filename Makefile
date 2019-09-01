@@ -66,3 +66,6 @@ docker-kill:
 docker-rm:
 	docker rm exam
 
+ownConfig:
+	cd $(PROJECT_ROOT)/vetzuki-host
+	GOOS=linux GOARCH=386 go build -o own_config own_config.go

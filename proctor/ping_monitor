@@ -1,5 +1,5 @@
 #!/bin/bash
-# EXAM_CONTAINER_IP : IP of the Exam container
+# EXAM_CONTAINER_IP : Boot IP of the prospect container
 # PROSPECT_IP : IP the prospect must bring up
 # PROSPECT_ID : ID of the prospect
 # PROSPECT_VIF : VIF on the net_$PROSPECT_ID bridge network
@@ -24,7 +24,12 @@ do
       break
   fi
 done
-
+# Track if the prospect disconnected themself
+DISCONNECTED_SELF=no
+ping -I $PROSPECT_VIF -w1 -t1 -c1 $EXAM_CONTAINER_IP
+if [ $? != 0 ] ; then
+    DISCONNECTED_SELF=yes
+fi
 # Create an exam result
 sed \
     -e "s/PROSPECT_ID/$PROSPECT_ID/" \
@@ -41,22 +46,22 @@ curl -q \
 if [ $examResult == "timeExceeded" ] ; then
     ssh -i $proctorIdentity \
     -o "StrictHostKeyChecking=no" \
-	root@$EXAM_CONTAINER_IP \
+	root@$PROSPECT_IP \
 	wall "Exam time limit exceeded. See $VETZUKI_UI/$PROSPECT_ID for next steps."
 fi
 
 if [ $examResult == "finish" ] ; then
     ssh -i $proctorIdentity \
     -o "StrictHostKeyChecking=no" \
-	root@$EXAM_CONTAINER_IP \
+	root@$PROSPECT_IP \
 	wall "Exam complete. See $VETZUKI_UI/$PROSPECT_ID for next steps."
 fi
 sleep 5
 ssh -i $proctorIdentity \
     -o "StrictHostKeyChecking=no" \
-    root@$EXAM_CONTAINER_IP wall "Test will now exit..."
+    root@$PROSPECT_IP wall "Test will now exit..."
 ssh -i $proctorIdentity \
     -o "StrictHostKeyChecking=no" \
-    root@$EXAM_CONTAINER_IP kill 1
+    root@$PROSPECT_IP kill 1
 
 # Exit the container
