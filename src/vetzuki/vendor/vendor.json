@@ -1,0 +1,19 @@
+{
+	"comment": "",
+	"ignore": "test",
+	"package": [
+		{
+			"checksumSHA1": "byf5Y5rhCcKhBjzTk4yUkqfXr6c=",
+			"path": "gopkg.in/asn1-ber.v1",
+			"revision": "f715ec2f112d1e4195b827ad68cf44017a3ef2b1",
+			"revisionTime": "2018-10-15T20:05:46Z"
+		},
+		{
+			"checksumSHA1": "OFOJ8wTA3V2MIgGyH23F/DU6J/k=",
+			"path": "gopkg.in/ldap.v3",
+			"revision": "9f0d712775a0973b7824a1585a86a4ea1d5263d9",
+			"revisionTime": "2019-04-17T17:18:12Z"
+		}
+	],
+	"rootPath": "github.com/vetzuki"
+}
