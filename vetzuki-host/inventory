@@ -1,2 +1,2 @@
 [poc]
-poc_exam_host ansible_host=vetzuki ansible_user=ec2-user
+poc_exam_host ansible_host=vetzuki-poc ansible_user=ec2-user
