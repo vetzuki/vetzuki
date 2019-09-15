@@ -110,3 +110,44 @@ func FindProspect(c *ldap.Conn, prospectID string) (*User, bool) {
 	log.Printf("warning: found %d entries for prospect %s, expected 1", len(result.Entries), prospectID)
 	return nil, false
 }
+
+// CreateProspect : Create prospect given an prospectID
+func CreateProspect(c *ldap.Conn, prospectID string) (*User, bool) {
+	var user *User
+	var uidNumber string
+	dn := prospectDN(prospectID)
+
+	log.Printf("debug: creating %s for %s", dn, prospectID)
+	if err := c.Bind(bindDN, bindPassword); err != nil {
+		log.Printf("error: failed to bind %s", err)
+		return user, false
+	}
+	if n, err := NextUID(); err != nil {
+		log.Printf("error: failed to get next UID: %s", err)
+		return user, false
+	} else {
+		uidNumber = fmt.Sprintf("%d", n)
+	}
+	prospect := ldap.NewAddRequest(dn, nil)
+	prospect.Attribute("uid", []string{prospectID})
+	prospect.Attribute("cn", []string{prospectID})
+	prospect.Attribute("sn", []string{prospectID})
+	prospect.Attribute("uidNumber", []string{uidNumber})
+	prospect.Attribute("gidNumber", []string{uidNumber})
+	prospect.Attribute("homeDirectory", []string{fmt.Sprintf("/home/%s", prospectID)})
+	prospect.Attribute("objectClass", []string{"organizationalPerson", "posixAccount"})
+
+	if err := c.Add(prospect); err != nil {
+		log.Printf("error: failed to create user %s: %s", prospectID, err)
+		return user, false
+	}
+	user = &User{
+		Name: prospectID,
+		DN:   dn,
+		User: prospectID,
+		UID:  uidNumber,
+		GID:  uidNumber,
+		CN:   prospectID,
+	}
+	return user, true
+}

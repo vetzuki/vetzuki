@@ -46,3 +46,26 @@ func TestFindUser(t *testing.T) {
 		t.Fatalf("Expected prospect name to be %s, got %s", seeds.Users[0].Name, prospect.Name)
 	}
 }
+
+func TestCreateUser(t *testing.T) {
+	ldapConnection, err := ldap.Dial("tcp", "localhost:389")
+	if err != nil {
+		t.Fatalf("failed to connect to ldap server at localhost: %s", err)
+	}
+	prospectID := "testProspect1"
+	prospect, ok := CreateProspect(ldapConnection, prospectID)
+	if !ok {
+		t.Fatalf("expected to create %s, but failed", prospectID)
+	}
+	if prospect.Name != prospectID {
+		t.Fatalf("expected to %s to equal %s", prospect.Name, prospectID)
+	}
+	found, foundOK := FindProspect(ldapConnection, prospectID)
+	if !foundOK {
+		t.Fatalf("expected to find new user %s, but failed", prospectID)
+	}
+	if found.Name != prospectID {
+		t.Fatalf("expected %s to equal prospectID %s", found.Name, prospectID)
+	}
+
+}
