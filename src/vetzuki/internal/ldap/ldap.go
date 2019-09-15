@@ -17,9 +17,11 @@ const (
 	envBindDN        = "BIND_DN"
 	envBindPassword  = "BIND_PASSWORD"
 	envBaseDN        = "BASE_DN"
+	envLDAPHost      = "LDAP_HOST"
 )
 
 var (
+	ldapHost                = "localhost:389"
 	bindDN                  = ""
 	bindPassword            = ""
 	baseDN                  = "ou=prospect,dc=vetzuki,dc=com"
@@ -37,6 +39,9 @@ func init() {
 	}
 	if b := os.Getenv(envBaseDN); len(b) > 0 {
 		baseDN = b
+	}
+	if b := os.Getenv(envLDAPHost); len(b) > 0 {
+		ldapHost = b
 	}
 }
 

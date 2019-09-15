@@ -3,6 +3,36 @@
 	"ignore": "test",
 	"package": [
 		{
+			"checksumSHA1": "4xPIT0kdGEiWKiTdE0cznhoutYg=",
+			"path": "github.com/go-redis/redis",
+			"revision": "e2c6acad22794851071c550c10e34464878e43b2",
+			"revisionTime": "2019-09-13T14:32:06Z"
+		},
+		{
+			"path": "github.com/go-redis/redis/v7/internal",
+			"revision": "e2c6acad22794851071c550c10e34464878e43b2"
+		},
+		{
+			"path": "github.com/go-redis/redis/v7/internal/consistenthash",
+			"revision": "e2c6acad22794851071c550c10e34464878e43b2"
+		},
+		{
+			"path": "github.com/go-redis/redis/v7/internal/hashtag",
+			"revision": "e2c6acad22794851071c550c10e34464878e43b2"
+		},
+		{
+			"path": "github.com/go-redis/redis/v7/internal/pool",
+			"revision": "e2c6acad22794851071c550c10e34464878e43b2"
+		},
+		{
+			"path": "github.com/go-redis/redis/v7/internal/proto",
+			"revision": "e2c6acad22794851071c550c10e34464878e43b2"
+		},
+		{
+			"path": "github.com/go-redis/redis/v7/internal/util",
+			"revision": "e2c6acad22794851071c550c10e34464878e43b2"
+		},
+		{
 			"checksumSHA1": "byf5Y5rhCcKhBjzTk4yUkqfXr6c=",
 			"path": "gopkg.in/asn1-ber.v1",
 			"revision": "f715ec2f112d1e4195b827ad68cf44017a3ef2b1",
@@ -15,5 +45,5 @@
 			"revisionTime": "2019-04-17T17:18:12Z"
 		}
 	],
-	"rootPath": "github.com/vetzuki"
+	"rootPath": "github.com/vetzuki/vetzuki"
 }
