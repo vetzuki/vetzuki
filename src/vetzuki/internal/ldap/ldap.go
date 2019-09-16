@@ -3,6 +3,7 @@ package ldap
 import (
 	"crypto/tls"
 	"fmt"
+	"github.com/sethvargo/go-password/password"
 	"log"
 	"net"
 	"os"
@@ -127,6 +128,11 @@ func CreateProspect(c *ldap.Conn, prospectID string) (*User, bool) {
 		return user, false
 	}
 	uidNumber := fmt.Sprintf("%d", n)
+	userPassword, err := password.Generate(16, 4, 2, false, false)
+	if err != nil {
+		log.Printf("error: failed to generate user password: %s", err)
+		return user, false
+	}
 
 	prospect := ldap.NewAddRequest(dn, nil)
 	prospect.Attribute("uid", []string{prospectID})
@@ -136,6 +142,7 @@ func CreateProspect(c *ldap.Conn, prospectID string) (*User, bool) {
 	prospect.Attribute("gidNumber", []string{uidNumber})
 	prospect.Attribute("homeDirectory", []string{fmt.Sprintf("/home/%s", prospectID)})
 	prospect.Attribute("objectClass", []string{"organizationalPerson", "posixAccount"})
+	prospect.Attribute("userPassword", []string{userPassword})
 
 	if err := c.Add(prospect); err != nil {
 		log.Printf("error: failed to create user %s: %s", prospectID, err)
