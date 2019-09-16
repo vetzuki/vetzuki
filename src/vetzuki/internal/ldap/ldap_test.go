@@ -53,6 +53,7 @@ func TestCreateUser(t *testing.T) {
 		t.Fatalf("failed to connect to ldap server at localhost: %s", err)
 	}
 	prospectID := "testProspect1"
+	_ = DeleteProspect(ldapConnection, prospectID)
 	prospect, ok := CreateProspect(ldapConnection, prospectID)
 	if !ok {
 		t.Fatalf("expected to create %s, but failed", prospectID)

@@ -114,7 +114,6 @@ func FindProspect(c *ldap.Conn, prospectID string) (*User, bool) {
 // CreateProspect : Create prospect given an prospectID
 func CreateProspect(c *ldap.Conn, prospectID string) (*User, bool) {
 	var user *User
-	var uidNumber string
 	dn := prospectDN(prospectID)
 
 	log.Printf("debug: creating %s for %s", dn, prospectID)
@@ -122,12 +121,13 @@ func CreateProspect(c *ldap.Conn, prospectID string) (*User, bool) {
 		log.Printf("error: failed to bind %s", err)
 		return user, false
 	}
-	if n, err := NextUID(); err != nil {
+	n, err := NextUID()
+	if err != nil {
 		log.Printf("error: failed to get next UID: %s", err)
 		return user, false
-	} else {
-		uidNumber = fmt.Sprintf("%d", n)
 	}
+	uidNumber := fmt.Sprintf("%d", n)
+
 	prospect := ldap.NewAddRequest(dn, nil)
 	prospect.Attribute("uid", []string{prospectID})
 	prospect.Attribute("cn", []string{prospectID})
@@ -150,4 +150,20 @@ func CreateProspect(c *ldap.Conn, prospectID string) (*User, bool) {
 		CN:   prospectID,
 	}
 	return user, true
+}
+
+// DeleteProspect : Delete a prospect given a prospectID
+func DeleteProspect(c *ldap.Conn, prospectID string) bool {
+	dn := prospectDN(prospectID)
+	log.Printf("debug: deleting %s for %s", dn, prospectID)
+	d := ldap.NewDelRequest(dn, nil)
+	if err := c.Bind(bindDN, bindPassword); err != nil {
+		log.Printf("error: failed to bind for delete: %s", err)
+		return false
+	}
+	if err := c.Del(d); err != nil {
+		log.Printf("error: failed to delete %s: %s", prospectID, err)
+		return false
+	}
+	return true
 }
