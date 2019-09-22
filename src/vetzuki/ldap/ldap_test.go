@@ -21,7 +21,7 @@ func init() {
 	bindDN = fmt.Sprintf("cn=admin,dc=%s,dc=vetzuki,dc=com", testEnvironment)
 	bindPassword = testEnvironment
 
-	seedsFile := "../../seeds." + testEnvironment + ".json"
+	seedsFile := "../seeds." + testEnvironment + ".json"
 	f, err := os.Open(seedsFile)
 	if err != nil {
 		panic(fmt.Sprintf("fatal: unable to read seeds file %s: %s", seedsFile, err))

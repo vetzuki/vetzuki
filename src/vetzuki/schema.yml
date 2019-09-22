@@ -1,33 +1,41 @@
 - hosts: localhost
   vars:
     vetzuki_environment: poc
+    vetzuki_go_project: "github.com/vetzuki/vetzuki"
+    vetzuki_project_root: "{{ ansible_user_dir }}/development/go/src/{{ vetzuki_go_project }}"
     aws_region: "us-west-2"
     public_ip: "71.204.152.97"
     db_reset: no
+    db_seed: no
     db_triggers:
       update_timestamp: update_timestamp.sql
     tables:
+      - name: billing
+        columns:
+          - id bigserial primary key
       - name: employer
         columns:
           - id bigserial primary key
-          - name text
-          - billing_email text
-          - billing_id bigint
+          - name text not null
+          - email text unique not null
+          - billing_email text not null
+          - billing_id bigint references billing(id)
           - billing_state int # 0:Paid, 1:Pending, 2:Owes, 3:Unconfirmed, 4:OneTime
           - created TIMESTAMPTZ NOT NULL DEFAULT NOW()
           - modified TIMESTAMPTZ NOT NULL DEFAULT NOW()
       - name: exam
         columns:
           - id bigserial primary key
-          - name text # Describes the type of exam
+          - name text unique # Describes the type of exam
           - description text
           - created TIMESTAMPTZ NOT NULL DEFAULT NOW()
           - modified TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      # When an exam or employer are delete, Then delete the employerExam
       - name: employer_exam
         columns:
           - id bigserial primary key
-          - exam_id bigint references exam(id)
-          - employer_id bigint references employer(id)
+          - exam_id bigint references exam(id) ON DELETE CASCADE
+          - employer_id bigint references employer(id) ON DELETE CASCADE
           - created TIMESTAMPTZ NOT NULL DEFAULT NOW()
           - modified TIMESTAMPTZ NOT NULL DEFAULT NOW()
       - name: prospect
@@ -40,17 +48,22 @@
           - employer_exam_id bigint references employer_exam(id)
           - created TIMESTAMPTZ NOT NULL DEFAULT NOW()
           - modified TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      # When a prospect, employer or employer exam are deleted
+      # Then delete the employer prospect
       - name: employer_prospect
         columns:
-          - prospect_id bigint references prospect(id)
-          - employer_id bigint references employer(id)
-          - employer_exam_id bigint references employer_exam(id)
+          - prospect_id bigint references prospect(id) ON DELETE CASCADE
+          - employer_id bigint references employer(id) ON DELETE CASCADE
+          - employer_exam_id bigint references employer_exam(id) ON DELETE CASCADE
     seeds:
       employer:
-        - {"name": "Employer1"}
-        - {"name": "Employer2"}
+        - name: recruiter person
+          email: recruiter@employer1.com
+          billing_email: ap@employer1.com
+          billing_state: 0
       exam:
-        - {"name": "Exam1", "description": "Text exam1 skills"}
+        - name: exam
+          description: Test skills with exam
     rds:
       aws_access_key: "AKIAYSBEZFXG4OEJWLUE"
       aws_secret_key: "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"
@@ -106,7 +119,19 @@
         port: "{{ db_port }}"
         login_user: "{{ rds.username }}"
         login_password: "{{ rds.password }}"
-
+    - name: Truncate tables
+      when: db_seed and not db_reset
+      loop: "{{ tables }}"
+      loop_control:
+        loop_var: table
+      postgresql_query:
+        login_host: "{{ db_host }}"
+        port: "{{ db_port }}"
+        login_user: "{{ rds.username }}"
+        login_password: "{{ rds.password }}"
+        db: vetzuki
+        query: |
+          TRUNCATE TABLE {{ table.name }} CASCADE
     - name: Create tables
       loop: "{{ tables }}"
       loop_control:
@@ -122,6 +147,7 @@
         columns: "{{ table.columns }}"
     # Create trigger to update modified timestamp on row updates
     - name: Create set timestamp trigger
+      when: db_reset
       postgresql_query:
         login_host: "{{ db_host }}"
         port: "{{ db_port }}"
@@ -130,6 +156,7 @@
         db: vetzuki
         path_to_script: "{{ ansible_env.PWD }}/{{ db_triggers.update_timestamp }}"
     - name: Attach set timestamp trigger
+      when: db_reset
       loop: "{{ tables }}"
       loop_control:
         loop_var: table
@@ -156,9 +183,14 @@
         login_user: "{{ rds.username }}"
         login_password: "{{ rds.password }}"
         db: vetzuki
-        query: "insert into employer (name) values(%s)"
+        query: |
+          INSERT INTO employer (name, email, billing_email, billing_state)
+          VALUES (%s, %s, %s, %s)
         positional_args:
           - "{{ employer.name }}"
+          - "{{ employer.email }}"
+          - "{{ employer.billing_email }}"
+          - "{{ employer.billing_state }}"
     - name: Seed exams
       when: db_seed
       loop: "{{ seeds.exam }}"
@@ -174,3 +206,13 @@
         positional_args:
           - "{{ exam.name }}"
           - "{{ exam.description }}"
+    - name: Create .env file
+      copy:
+        dest: "{{ vetzuki_project_root }}/.env"
+        content: |
+          LDAP_HOST=localhost:389
+          DB_HOST={{ db_host }}
+          DB_PORT={{ db_port }}
+          DB_NAME=vetzuki
+          DB_USERNAME={{ rds.username }}
+          DB_PASSWORD={{ rds.password }}
