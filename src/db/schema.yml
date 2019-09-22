@@ -40,6 +40,17 @@
           - employer_exam_id bigint references employer_exam(id)
           - created TIMESTAMPTZ NOT NULL DEFAULT NOW()
           - modified TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      - name: employer_prospect
+        columns:
+          - prospect_id bigint references prospect(id)
+          - employer_id bigint references employer(id)
+          - employer_exam_id bigint references employer_exam(id)
+    seeds:
+      employer:
+        - {"name": "Employer1"}
+        - {"name": "Employer2"}
+      exam:
+        - {"name": "Exam1", "description": "Text exam1 skills"}
     rds:
       aws_access_key: "AKIAYSBEZFXG4OEJWLUE"
       aws_secret_key: "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"
@@ -133,3 +144,33 @@
           BEFORE UPDATE ON {{ table.name }}
           FOR EACH ROW
           EXECUTE PROCEDURE trigger_set_timestamp();
+
+    - name: Seed employers
+      when: db_seed
+      loop: "{{ seeds.employer }}"
+      loop_control:
+        loop_var: employer
+      postgresql_query:
+        login_host: "{{ db_host }}"
+        port: "{{ db_port }}"
+        login_user: "{{ rds.username }}"
+        login_password: "{{ rds.password }}"
+        db: vetzuki
+        query: "insert into employer (name) values(%s)"
+        positional_args:
+          - "{{ employer.name }}"
+    - name: Seed exams
+      when: db_seed
+      loop: "{{ seeds.exam }}"
+      loop_control:
+        loop_var: exam
+      postgresql_query:
+        login_host: "{{ db_host }}"
+        port: "{{ db_port }}"
+        login_user: "{{ rds.username }}"
+        login_password: "{{ rds.password }}"
+        db: vetzuki
+        query: "insert into exam (name, description) values(%s, %s)"
+        positional_args:
+          - "{{ exam.name }}"
+          - "{{ exam.description }}"
