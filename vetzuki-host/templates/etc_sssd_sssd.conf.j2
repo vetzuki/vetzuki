@@ -1,0 +1,42 @@
+[domain/default]
+
+autofs_provider = ldap
+cache_credentials = True
+ldap_search_base = dc={{ vetzuki_environment }},dc=vetzuki,dc=com
+id_provider = ldap
+auth_provider = ldap
+chpass_provider = ldap
+
+ldap_uri = ldaps://localhost:636
+ldap_default_bind_dn = cn=admin,dc=poc,dc=vetzuki,dc=com
+ldap_default_authtok = {{ ldap.password }}
+
+ldap_id_use_start_tls = False
+ldap_tls_reqcert = allow
+ldap_tls_cacert = {{ ca_ssl_root }}/certs/{{ hostname }}.crt
+ldap_tls_cert = {{ ca_ssl_root }}/certs/{{ hostname }}.crt
+ldap_tls_key = {{ ca_ssl_root }}/keys/{{ hostname }}.key
+
+[sssd]
+services = nss, pam, autofs
+
+domains = default
+[nss]
+homedir_substring = /home
+
+[pam]
+
+[sudo]
+
+[autofs]
+
+[ssh]
+
+[pac]
+
+[ifp]
+
+[secrets]
+
+[session_recording]
+

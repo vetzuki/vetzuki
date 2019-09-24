@@ -9,3 +9,6 @@ terraform.tfstate*
 
 # binaries
 own_config
+
+sslroot
+.env

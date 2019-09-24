@@ -1,0 +1,22 @@
+{
+  "ldap_users": [
+    {
+      "id": 1001,
+      "name": "prospect1",
+      "cn": "prospect1",
+      "dn": "cn=prospect1,ou=prospects,dc=poc,dc=vetzuki,dc=com"
+    },
+    {
+      "id": 1002,
+      "name": "prospect2",
+      "cn": "prospect2",
+      "dn": "cn=prospect2,ou=prospects,dc=poc,dc=vetzuki,dc=com"
+    },
+    {
+      "id": 1003,
+      "name": "prospect3",
+      "cn": "prospect3",
+      "dn": "cn=prospect3,ou=prospects,dc=poc,dc=vetzuki,dc=com"
+    }
+  ]
+}

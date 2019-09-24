@@ -1,0 +1,12 @@
+- name: Create a CA
+  hosts: localhost
+  vars:
+    vetzuki_environment: poc
+    hostname: "{{ ansible_hostname }}"
+    ca_ssl_root: "{{ ansible_env.PWD }}/sslroot"
+    csr_sans: ""
+    sans_list: []
+  tasks:
+    - pip: name=pyOpenSSL
+    - include_role:
+        name: ca

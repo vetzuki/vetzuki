@@ -1,0 +1,20 @@
+# ldap.conf.j2
+
+BASE dc={{ vetzuki_environment }}, dc=vetzuki, dc=com
+scope sub
+suffix          "dc={{ vetzuki_environment }},dc=vetzuki,dc=com"
+
+## there are needed when your ldap dies
+timelimit 5
+bind_timelimit 5
+
+uri ldap://ldap.{{ vetzuki_environment }}.vetzuki.com
+pam_password exop
+
+ldap_version 3
+pam_filter objectclass=posixAccount
+pam_login_attribute uid
+pam_member_attribute memberuid
+
+nss_base_passwd ou=prospects,dc={{ vetzuki_environment }},dc=vetzuki,dc=com"
+nss_base_shadow ou=prospects,dc={{ vetzuki_environment }},dc=vetzuki,dc=com"
