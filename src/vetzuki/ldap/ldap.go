@@ -19,13 +19,16 @@ const (
 	envBindPassword  = "BIND_PASSWORD"
 	envBaseDN        = "BASE_DN"
 	envLDAPHost      = "LDAP_HOST"
+	envEnvironment   = "VETZUKI_ENVIRONMENT"
 )
 
 var (
 	ldapHost                = "localhost:389"
 	bindDN                  = ""
 	bindPassword            = ""
-	baseDN                  = "ou=prospect,dc=vetzuki,dc=com"
+	environment             = "development"
+	baseDN                  = fmt.Sprintf("ou=prospect,dc=%s, dc=vetzuki,dc=com", environment)
+	groupsDN                = fmt.Sprintf("ou=groups,dc=%s,dc=vetzuki,dc=com", environment)
 	tlsNoVerify             = &tls.Config{InsecureSkipVerify: true}
 	prospectQueryAttributes = []string{"dn"}
 )
@@ -33,6 +36,8 @@ var (
 func init() {
 	log.SetFlags(log.Lshortfile | log.LstdFlags)
 }
+
+// ConfigureConnection : Set the baseDN, bindDN and password
 func ConfigureConnection(base, bind, password string) {
 	baseDN = base
 	bindDN = bind
@@ -72,7 +77,7 @@ func Connect() *ldap.Conn {
 	return conn
 }
 
-// User - A user in ldap
+// User : A user in ldap
 type User struct {
 	// Name - Must be the same as a prospectURL
 	Name string `json:"name"`
@@ -83,6 +88,14 @@ type User struct {
 	GID  string `json:"gid"`
 }
 
+// Group : A Group in LDAP
+type Group struct {
+	Name    string   `json:"name"`
+	DN      string   `json:"dn"`
+	CN      string   `json:"cn"`
+	Members []string `json:"members"`
+}
+
 func prospectQuery(prospectURL string) string {
 	return fmt.Sprintf("(uid=%s)", prospectURL)
 }
@@ -90,7 +103,7 @@ func prospectDN(prospectURL string) string {
 	return fmt.Sprintf("cn=%s,%s", prospectURL, baseDN)
 }
 
-// FindProspect - Locate a prospect
+// FindProspect : Locate a prospect
 func FindProspect(c *ldap.Conn, prospectURL string) (*User, bool) {
 	dn := prospectDN(prospectURL)
 	log.Printf("debug: searching %s for %s", baseDN, prospectURL)
@@ -173,6 +186,11 @@ func CreateProspect(c *ldap.Conn, prospectURL string) (*User, bool) {
 		GID:  uidNumber,
 		CN:   prospectURL,
 	}
+	_, ok := AddGroupMember(c, "docker", user)
+	if !ok {
+		log.Printf("error: failed to add user %s to docker group", user.Name)
+		return nil, false
+	}
 	return user, true
 }
 
@@ -187,6 +205,78 @@ func DeleteProspect(c *ldap.Conn, prospectURL string) bool {
 	}
 	if err := c.Del(d); err != nil {
 		log.Printf("error: failed to delete %s: %s", prospectURL, err)
+		return false
+	}
+	return true
+}
+func groupDN(groupName string) string {
+	return fmt.Sprintf("cn=%s,%s", groupName, groupsDN)
+}
+
+// AddGroupMember : Add a User to a group
+func AddGroupMember(c *ldap.Conn, groupName string, user *User) (*Group, bool) {
+	dn := groupDN(groupName)
+	if err := c.Bind(bindDN, bindPassword); err != nil {
+		log.Printf("error: failed to bind: %s", err)
+		return nil, false
+	}
+	request := ldap.NewModifyRequest(dn, nil)
+	request.Add("memberUid", []string{user.UID})
+	err := c.Modify(request)
+	if err != nil {
+		log.Printf("error: failed to add %s to group %s: %s", user.Name, groupName, err)
+		return nil, false
+	}
+	return GetGroup(c, groupName)
+}
+
+// GetGroup : Get a group
+func GetGroup(c *ldap.Conn, groupName string) (*Group, bool) {
+	dn := groupDN(groupName)
+	if err := c.Bind(bindDN, bindPassword); err != nil {
+		log.Printf("error: failed to bind: %s", err)
+		return nil, false
+	}
+	request := ldap.NewSearchRequest(
+		groupsDN,
+		ldap.ScopeWholeSubtree,
+		ldap.NeverDerefAliases,
+		unlimitedSize,
+		unlimitedTimeout,
+		false,
+		fmt.Sprintf("(cn=%s)", groupName),
+		[]string{"dn", "cn", "memberUid"},
+		nil)
+	result, err := c.Search(request)
+	if err != nil {
+		log.Printf("error: search for group %s failed: %s", dn, err)
+		return nil, false
+	}
+	if len(result.Entries) == 1 {
+		entry := result.Entries[0]
+		return &Group{
+			Name:    entry.GetAttributeValue("cn"),
+			CN:      entry.GetAttributeValue("cn"),
+			DN:      entry.DN,
+			Members: entry.GetAttributeValues("memberUid"),
+		}, true
+	}
+	log.Printf("warning: found %d entries for group %s", len(result.Entries), groupName)
+	return nil, false
+}
+
+// RemoveGroupMember : Remove member from group
+func RemoveGroupMember(c *ldap.Conn, groupName string, user *User) bool {
+	dn := groupDN(groupName)
+	if err := c.Bind(bindDN, bindPassword); err != nil {
+		log.Printf("error: failed to bind: %s", err)
+		return false
+	}
+	request := ldap.NewModifyRequest(dn, nil)
+	request.Delete("memberUid", []string{user.UID})
+	err := c.Modify(request)
+	if err != nil {
+		log.Printf("error: failed to remove %s from %s: %s", user.UID, groupName, err)
 		return false
 	}
 	return true

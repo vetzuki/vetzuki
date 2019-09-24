@@ -68,5 +68,28 @@ func TestCreateUser(t *testing.T) {
 	if found.Name != prospectID {
 		t.Fatalf("expected %s to equal prospectID %s", found.Name, prospectID)
 	}
+}
+func TestAddGroupMember(t *testing.T) {
+	ldapConnection, err := ldap.Dial("tcp", "localhost:389")
+	if err != nil {
+		t.Fatalf("failed to connect to ldap server at localhost: %s", err)
+	}
+	uid := "10000"
+	groupName := "docker"
+	defer RemoveGroupMember(ldapConnection, groupName, &User{UID: uid})
+	dockerGroup, ok := AddGroupMember(ldapConnection, groupName, &User{UID: uid})
+	if !ok {
+		t.Fatalf("expected to add %s to %s, but failed", uid, groupName)
+	}
+	found := false
+	for _, member := range dockerGroup.Members {
+		found = member == uid
+		if found {
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected to find %s, but failed", uid)
+	}
 
 }
