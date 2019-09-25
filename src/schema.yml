@@ -43,7 +43,9 @@
           - id bigserial primary key
           - name text
           - email text
-          - url text
+          - url text unique NOT NULL
+          - role text NOT NULL # job role
+          - employer_name text NOT NULL 
           - employer_id bigint references employer(id)
           - employer_exam_id bigint references employer_exam(id)
           - created TIMESTAMPTZ NOT NULL DEFAULT NOW()

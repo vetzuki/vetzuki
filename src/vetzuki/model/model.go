@@ -100,6 +100,10 @@ func CreateEmployerProspect(employerID, examID int64, name, email string) (*Empl
 	return createEmployerProspect(employerExam, prospect)
 }
 
+// GetProspect : Get a prospect by their URL
+func GetProspect(prospectURL string) (*Prospect, bool) {
+	return findProspect(prospectURL)
+}
 func createEmployerProspect(employerExam *EmployerExam, prospect *Prospect) (*EmployerProspect, bool) {
 	ep := &EmployerProspect{
 		ProspectID:     prospect.ID,
@@ -164,20 +168,44 @@ func createEmployerExam(employer *Employer, exam *Exam) (*EmployerExam, bool) {
 func findProspectByID(id int64) (*Prospect, bool) {
 	prospect := &Prospect{ID: id}
 	err := connection.QueryRow(`
-	  SELECT name, email, url, employer_id, employer_exam_id, created, modified
+	  SELECT name, email, url, role, employer_name, employer_id, employer_exam_id, created, modified
 	  FROM prospect
 	  WHERE id = $1
 	`, id).Scan(
 		&prospect.Name,
 		&prospect.Email,
 		&prospect.URL,
+		&prospect.Role,
+		&prospect.EmployerName,
 		&prospect.EmployerID,
 		&prospect.EmployerExamID,
 		&prospect.Created,
 		&prospect.Modified,
 	)
 	if err != nil {
-		log.Printf("error: failed to locate prospect %d", id)
+		log.Printf("error: failed to locate prospect %d: %s", id, err)
+		return nil, false
+	}
+	return prospect, true
+}
+func findProspect(prospectURL string) (*Prospect, bool) {
+	prospect := &Prospect{URL: prospectURL}
+	err := connection.QueryRow(`
+	SELECT id,name, email, role, employer_name, employer_id, employer_exam_id, created, modified
+	FROM prospect
+	WHERE url = $1`, prospectURL).Scan(
+		&prospect.ID,
+		&prospect.Name,
+		&prospect.Email,
+		&prospect.Role,
+		&prospect.EmployerName,
+		&prospect.EmployerID,
+		&prospect.EmployerExamID,
+		&prospect.Created,
+		&prospect.Modified,
+	)
+	if err != nil {
+		log.Printf("error : failed to locate prospect %s: %s", err)
 		return nil, false
 	}
 	return prospect, true
@@ -281,6 +309,8 @@ type Prospect struct {
 	ID             int64     `sql:"id" json:"id"`
 	Created        time.Time `sql:"created" json:"created"`
 	Modified       time.Time `sql:"modified" json:"modified"`
+	Role           string    `sql:"role" json:"role"`
+	EmployerName   string    `sql:"employer_name" json:"employerName"`
 	Name           string    `sql:"name" json:"name"`
 	Email          string    `sql:"email" json:"email"`
 	URL            string    `sql:"url" json:"url"`

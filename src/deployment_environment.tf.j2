@@ -1,0 +1,113 @@
+# This must be pre-processed with ansible
+# to get the proper DB information
+provider "aws" {
+  profile = "webDeployer"
+  region = "us-west-2"
+  access_key = "{{ deployer.access_key }}"
+  secret_key = "{{ deployer.secret_key }}"
+}
+
+variable "awsRegion" {
+  default = "us-west-2"
+}
+variable "vetzukiEnvironment" {
+  default = "{{ vetzuki_environment }}"
+}
+variable "apiGatewayStage" {
+  default = "{{ vetzuki_environment }}"
+}
+variable "getProspectLambdaName" {
+  default = "getProspect-{{vetzuki_environment }}"
+}
+variable "db_host" {
+  default = "{{ db_host }}"
+}
+variable "db_port" {
+  default = "{{ db_port }}"
+}
+variable "db_name" {
+  default = "{{ db_name }}"
+}
+variable "db_user" {
+  default = "{{ db_user }}"
+}
+variable "db_password" {
+  default = "{{ db_password }}"
+}
+
+resource "aws_api_gateway_rest_api" "api" {
+    name = "vetzuki-${var.vetzukiEnvironment}"
+}
+# /p
+resource "aws_api_gateway_resource" "prospectResources" {
+    path_part = "p"
+    parent_id = "${aws_api_gateway_rest_api.api.root_resource_id}"
+    rest_api_id = "${aws_api_gateway_rest_api.api.id}"
+}
+# /p/*
+resource "aws_api_gateway_resource" "prospectResource" {
+    path_part = "{prospectURLID}" # pass anything beyond p/ forward
+    parent_id = "${aws_api_gateway_resource.prospectResources.id}"
+    rest_api_id = "${aws_api_gateway_rest_api.api.id}"
+}
+resource "aws_api_gateway_method" "getProspectByURL" {
+    rest_api_id = "${aws_api_gateway_rest_api.api.id}"
+    resource_id = "${aws_api_gateway_resource.prospectResource.id}"
+    http_method = "GET"
+    authorization = "NONE"
+}
+# GET /p/* => Lambda
+resource "aws_api_gateway_integration" "getProspectIntegration" {
+    rest_api_id = "${aws_api_gateway_rest_api.api.id}"
+    resource_id = "${aws_api_gateway_resource.prospectResource.id}"
+    http_method = "${aws_api_gateway_method.getProspectByURL.http_method}"
+    integration_http_method = "GET"
+    type = "AWS_PROXY"
+    uri = "arn:aws:apigateway:${var.awsRegion}:lambda:path/2015-03-31/functions/${aws_lambda_function.getProspectLambda.arn}/invocations"
+}
+
+resource "aws_lambda_permission" "getProspectLambdaPermission" {
+    statement_id = "AllowExecutionFromAPIGateway"
+    action = "lambda:InvokeFunction"
+    function_name = "${aws_lambda_function.getProspectLambda.function_name}"
+    principal = "apigateway.amazonaws.com"
+}
+
+resource "aws_iam_role" "lambdaRole" {
+    name = "getProspect${var.vetzukiEnvironment}Role"
+    assume_role_policy = <<POLICY
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Action": "sts:AssumeRole",
+      "Principal": {
+        "Service": "lambda.amazonaws.com"
+      },
+      "Effect": "Allow",
+      "Sid": ""
+    }
+  ]
+}
+POLICY
+}
+
+resource "aws_lambda_function" "getProspectLambda" {
+    filename = "getProspect/lambda.zip"
+    function_name = "${var.getProspectLambdaName}"
+    role = "${aws_iam_role.lambdaRole.arn}"
+    handler = "handler"
+    runtime = "go1.x"
+    source_code_hash = "${filebase64sha256("getProspect/lambda.zip")}"
+    environment {
+      variables = {
+        SSH_URL = "ssh.${var.vetzukiEnvironment}.vetzuki.com"
+        DB_HOST = "db.${var.vetzukiEnvironment}.vetzuki.com"
+        DB_PORT = "${var.db_port}"
+        DB_USER = "${var.db_user}"
+        DB_PASSWORD = "${var.db_password}"
+        DB_NAME = "${var.db_name}"
+
+      }
+    }
+}
