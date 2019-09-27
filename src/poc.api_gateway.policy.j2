@@ -1,0 +1,27 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Deny",
+            "Principal": "*",
+            "Action": "execute-api:Invoke",
+            "Resource": "arn:aws:execute-api:us-west-2:588487667149:1a3cwd55s6/*/GET/p/*",
+            "Condition": {
+                "NotIpAddress": {
+                    "aws:SourceIp": "{{ public_ip }}/32"
+                }
+            }
+        },
+        {
+            "Effect": "Allow",
+            "Principal": "*",
+            "Action": "execute-api:Invoke",
+            "Resource": "arn:aws:execute-api:us-west-2:588487667149:1a3cwd55s6/*/GET/p/*",
+            "Condition": {
+                "IpAddress": {
+                    "aws:SourceIp": "{{ public_ip }}/32"
+                }
+            }
+        }
+    ]
+}
