@@ -13,6 +13,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 	// "github.com/aws/aws-sdk-go/service/s3"
 	"github.com/vetzuki/vetzuki/model"
@@ -164,24 +165,41 @@ func render(t *template.Template, p *Page) (string, error) {
 
 // Handle : Takes care of handling the request
 // returns a compiled HTML template
-func Handle(ctx context.Context, r Redemption) (string, error) {
+func Handle(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
+	r := Redemption{ProspectURLID: request.PathParameters["prospectURLID"]}
+	log.Printf("debug: redeeming URL for %s", r.ProspectURLID)
+
 	t := getTemplate()
 	prospect, ok := model.GetProspect(r.ProspectURLID)
 	if !ok {
 		log.Printf("error: failed to find prospect %s", r.ProspectURLID)
-		return "not found", fmt.Errorf("404: No such URL")
+		return events.APIGatewayProxyResponse{
+			StatusCode: 404,
+			Body:       "not found",
+		}, fmt.Errorf("404: No such URL")
 	}
 	page, err := buildPage(r, prospect)
 	if err != nil {
 		log.Printf("error: while building page: %s", err)
-		return "error loading page", fmt.Errorf("500: Error rendering")
+		return events.APIGatewayProxyResponse{
+			StatusCode: 500,
+			Body:       "error loading page",
+		}, fmt.Errorf("500: Error rendering")
 	}
 	content, err := render(t, page)
 	if err != nil {
 		log.Printf("error: while rendering page: %s", err)
-		return "error loading page", fmt.Errorf("500: Error rendering")
+		return events.APIGatewayProxyResponse{
+			StatusCode: 500,
+			Body:       "error loading page",
+		}, fmt.Errorf("500: Error rendering")
 	}
-	return content, nil
+	return events.APIGatewayProxyResponse{
+		StatusCode:      200,
+		Headers:         map[string]string{"Content-Type": "text/html"},
+		Body:            content,
+		IsBase64Encoded: false,
+	}, nil
 }
 
 func main() {
