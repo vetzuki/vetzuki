@@ -74,7 +74,8 @@ func TestCreateProspect(t *testing.T) {
 	for i := range make([]int, 3) {
 		name := fmt.Sprintf("prospect%d", i)
 		email := fmt.Sprintf("%s@testmail.com", name)
-		p, ok := createProspect(employerExam, name, email)
+		role := "role"
+		p, ok := createProspect(employerExam, name, email, role)
 		if !ok {
 			t.Fatalf("expected to create prospect %s, but failed", email)
 		}
@@ -89,7 +90,7 @@ func TestCreateEmployerProspect(t *testing.T) {
 		&Employer{ID: int64(1)},
 		&Exam{ID: int64(1)},
 	)
-	prospect, _ := createProspect(employerExam, "name", "email@email.com")
+	prospect, _ := createProspect(employerExam, "name", "email@email.com", "role")
 	ep, ok := createEmployerProspect(employerExam, prospect)
 	if !ok {
 		t.Fatalf("expected to create employerProspect but failed")
@@ -111,7 +112,8 @@ func TestPublicCreateEmployerProspect(t *testing.T) {
 	examID := int64(1)
 	name := "prospect jones"
 	email := "prospect@email.com"
-	ep, ok := CreateEmployerProspect(employerID, examID, name, email)
+	role := "role"
+	ep, ok := CreateEmployerProspect(employerID, examID, name, email, role)
 	if !ok {
 		t.Fatalf("expected to create EmployerProspect but failed")
 	}

@@ -53,10 +53,10 @@ func Connect() {
 	dbPassword = os.Getenv(envDBPassword)
 	sslMode = os.Getenv(envSSLMode)
 	if len(sslMode) == 0 {
-		connectionString = fmt.Sprintf(connectionTemplate, dbUser, dbPassword, dbHost, dbPort, dbName)
-	} else {
-		connectionString = fmt.Sprintf(sslConnectionTemplate, dbUser, dbPassword, dbHost, dbPort, dbName, sslMode)
+		sslMode = "disable"
 	}
+	connectionString = fmt.Sprintf(sslConnectionTemplate, dbUser, dbPassword, dbHost, dbPort, dbName, sslMode)
+
 	log.Printf("debug: connecting to %s", connectionString)
 	if c, err := sql.Open("postgres", connectionString); err != nil {
 		log.Fatalf("fatal: unable to connect to %s: %s", connectionString, err)
@@ -66,7 +66,7 @@ func Connect() {
 }
 
 // CreateEmployerProspect : Create an EmployerExam, Prospect, and LDAP user
-func CreateEmployerProspect(employerID, examID int64, name, email string) (*EmployerProspect, bool) {
+func CreateEmployerProspect(employerID, examID int64, name, email, role string) (*EmployerProspect, bool) {
 	employer, ok := findEmployerByID(employerID)
 	if !ok {
 		log.Printf("error: failed to locate employer %d", employerID)
@@ -82,7 +82,7 @@ func CreateEmployerProspect(employerID, examID int64, name, email string) (*Empl
 		log.Printf("error: failed to create employerExam for employer %s on exam %s", employer.Name, exam.Name)
 		return nil, false
 	}
-	prospect, ok := createProspect(employerExam, name, email)
+	prospect, ok := createProspect(employerExam, name, email, role)
 	if !ok {
 		log.Printf("error: failed to create prospect %s", email)
 	}
@@ -104,7 +104,13 @@ func CreateEmployerProspect(employerID, examID int64, name, email string) (*Empl
 func GetProspect(prospectURL string) (*Prospect, bool) {
 	return findProspect(prospectURL)
 }
+
+// GetEmployer : Get an employer by ID
+func GetEmployer(id int64) (*Employer, bool) {
+	return findEmployerByID(id)
+}
 func createEmployerProspect(employerExam *EmployerExam, prospect *Prospect) (*EmployerProspect, bool) {
+	log.Printf("debug: exam %d for %s", employerExam.ExamID, prospect.Email)
 	ep := &EmployerProspect{
 		ProspectID:     prospect.ID,
 		EmployerID:     employerExam.EmployerID,
@@ -117,6 +123,7 @@ func createEmployerProspect(employerExam *EmployerExam, prospect *Prospect) (*Em
 		ep.EmployerID,
 		ep.EmployerExamID,
 	)
+	log.Printf("debug: query result returned")
 
 	if row == nil {
 		log.Printf("error: failed to create employerProspect %d,%d,%d: %v",
@@ -125,21 +132,30 @@ func createEmployerProspect(employerExam *EmployerExam, prospect *Prospect) (*Em
 	}
 	return ep, true
 }
-func createProspect(employerExam *EmployerExam, name, email string) (*Prospect, bool) {
+func createProspect(employerExam *EmployerExam, name, email, role string) (*Prospect, bool) {
+	log.Printf("debug: creating exam %d for %s", employerExam.ExamID, email)
 	prospect := &Prospect{
 		Name:           name,
 		Email:          email,
 		URL:            xid.New().String(),
+		Role:           role,
 		EmployerID:     employerExam.EmployerID,
 		EmployerExamID: employerExam.ExamID,
 	}
+	employer, ok := GetEmployer(employerExam.EmployerID)
+	if !ok {
+		log.Printf("error: unable to locate employer %d", employerExam.EmployerID)
+	}
+	log.Printf("debug: prepared prospect %s", prospect.Email)
 	err := connection.QueryRow(`
-	  INSERT into prospect (name, email, url, employer_id, employer_exam_id)
-	  VALUES ($1, $2, $3, $4, $5)
+	  INSERT into prospect (name, email, url, employer_name, role, employer_id, employer_exam_id)
+	  VALUES ($1, $2, $3, $4, $5, $6, $7)
 	  RETURNING id, created, modified`,
 		prospect.Name,
 		prospect.Email,
 		prospect.URL,
+		employer.Name,
+		prospect.Role,
 		employerExam.EmployerID,
 		employerExam.ExamID,
 	).Scan(&prospect.ID, &prospect.Created, &prospect.Modified)
@@ -150,6 +166,7 @@ func createProspect(employerExam *EmployerExam, name, email string) (*Prospect, 
 	return prospect, true
 }
 func createEmployerExam(employer *Employer, exam *Exam) (*EmployerExam, bool) {
+	log.Printf("debug: creating for exam %s for employer %s", exam.Name, employer.Email)
 	employerExam := &EmployerExam{
 		EmployerID: employer.ID,
 		ExamID:     exam.ID,
@@ -166,6 +183,7 @@ func createEmployerExam(employer *Employer, exam *Exam) (*EmployerExam, bool) {
 	return employerExam, true
 }
 func findProspectByID(id int64) (*Prospect, bool) {
+	log.Printf("debug: finding prospect %d", id)
 	prospect := &Prospect{ID: id}
 	err := connection.QueryRow(`
 	  SELECT name, email, url, role, employer_name, employer_id, employer_exam_id, created, modified
@@ -189,6 +207,7 @@ func findProspectByID(id int64) (*Prospect, bool) {
 	return prospect, true
 }
 func findProspect(prospectURL string) (*Prospect, bool) {
+	log.Printf("debug: finding prospect %s", prospectURL)
 	prospect := &Prospect{URL: prospectURL}
 	err := connection.QueryRow(`
 	SELECT id,name, email, role, employer_name, employer_id, employer_exam_id, created, modified
@@ -205,12 +224,13 @@ func findProspect(prospectURL string) (*Prospect, bool) {
 		&prospect.Modified,
 	)
 	if err != nil {
-		log.Printf("error : failed to locate prospect %s: %s", err)
+		log.Printf("error : failed to locate prospect %s: %s", prospectURL, err)
 		return nil, false
 	}
 	return prospect, true
 }
 func findExamByID(id int64) (*Exam, bool) {
+	log.Printf("debug: finding %d", id)
 	exam := &Exam{ID: id}
 	err := connection.QueryRow(`
 	  SELECT name, description, created, modified
@@ -228,6 +248,7 @@ func findExamByID(id int64) (*Exam, bool) {
 	return exam, true
 }
 func findEmployerByID(id int64) (*Employer, bool) {
+	log.Printf("debug: finding %d", id)
 	employer := &Employer{ID: id}
 	err := connection.QueryRow(`
 	  SELECT name,email,  billing_email, billing_state, created, modified
@@ -246,6 +267,7 @@ func findEmployerByID(id int64) (*Employer, bool) {
 	return employer, true
 }
 func findEmployer(email string) (*Employer, bool) {
+	log.Printf("debug: finding %s", email)
 	employer := &Employer{Email: email}
 	row := connection.QueryRow(`
 	  SELECT id,name,billing_email, billing_state, created, modified
