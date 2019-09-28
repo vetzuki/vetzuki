@@ -134,17 +134,20 @@ func createEmployerProspect(employerExam *EmployerExam, prospect *Prospect) (*Em
 }
 func createProspect(employerExam *EmployerExam, name, email, role string) (*Prospect, bool) {
 	log.Printf("debug: creating exam %d for %s", employerExam.ExamID, email)
+
+	employer, ok := GetEmployer(employerExam.EmployerID)
+	if !ok {
+		log.Printf("error: unable to locate employer %d", employerExam.EmployerID)
+		return nil, false
+	}
 	prospect := &Prospect{
 		Name:           name,
 		Email:          email,
 		URL:            xid.New().String(),
 		Role:           role,
+		EmployerName:   employer.Name,
 		EmployerID:     employerExam.EmployerID,
 		EmployerExamID: employerExam.ExamID,
-	}
-	employer, ok := GetEmployer(employerExam.EmployerID)
-	if !ok {
-		log.Printf("error: unable to locate employer %d", employerExam.EmployerID)
 	}
 	log.Printf("debug: prepared prospect %s", prospect.Email)
 	err := connection.QueryRow(`
@@ -154,7 +157,7 @@ func createProspect(employerExam *EmployerExam, name, email, role string) (*Pros
 		prospect.Name,
 		prospect.Email,
 		prospect.URL,
-		employer.Name,
+		prospect.EmployerName,
 		prospect.Role,
 		employerExam.EmployerID,
 		employerExam.ExamID,
