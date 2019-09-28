@@ -1,4 +1,5 @@
-- hosts: localhost
+# Must be run from the same VPC as RDS
+- hosts: poc_exam_host
   vars:
     vetzuki_environment: poc
     vetzuki_go_project: "github.com/vetzuki/vetzuki"
@@ -74,35 +75,39 @@
       db_engine: postgres
       size: 10
       instance_type: db.t3.micro
-      username: "{{ vetzuki_environment }}"
       master_user_password: vetzuk1p0c
+      username: vetzuki
       password: vetzuk1p0c
+      database: vetzuki
       tags:
         Environment: "{{ vetzuki_environment }}"
         Application: "vetzuki"
   tasks:
-    - pip: name=psycopg2-binary
-    - name: Gather RDS connection information
-      command: 
-        argv:
-          - aws
-          - rds
-          - describe-db-instances
-          - --region
-          - "{{ rds.aws_region }}"
-          # - "--query 'DBInstances[*]'"
-      register: aws_output
-      environment:
-        AWS_ACCESS_KEY_ID: "{{ rds.aws_access_key }}"
-        AWS_SECRET_ACCESS_KEY: "{{ rds.aws_secret_key }}"
-        AWS_REGION: "{{ rds.aws_region }}"
-    - set_fact:
-        rds_instances: "{{ aws_output.stdout | from_json }}"
-    - set_fact:
-        db_host: "{{ rds_instances.DBInstances[0].Endpoint.Address }}"
-        db_port: "{{ rds_instances.DBInstances[0].Endpoint.Port }}"
-    - debug:
-        msg: "Postgres URL: postgres://{{ db_host}}:{{ db_port }}"
+    - pip: name=psycopg2-binary extra_args="--user"
+    # Gather RDS connection information
+    - include_role:
+        name: rds
+#    - name: Gather RDS connection information
+#      command: 
+#        argv:
+#          - aws
+#          - rds
+#          - describe-db-instances
+#          - --region
+#          - "{{ rds.aws_region }}"
+#          # - "--query 'DBInstances[*]'"
+#      register: aws_output
+#      environment:
+#        AWS_ACCESS_KEY_ID: "{{ rds.aws_access_key }}"
+#        AWS_SECRET_ACCESS_KEY: "{{ rds.aws_secret_key }}"
+#        AWS_REGION: "{{ rds.aws_region }}"
+#    - set_fact:
+#        rds_instances: "{{ aws_output.stdout | from_json }}"
+#    - set_fact:
+#        db_host: "{{ rds_instances.DBInstances[0].Endpoint.Address }}"
+#        db_port: "{{ rds_instances.DBInstances[0].Endpoint.Port }}"
+#    - debug:
+#        msg: "Postgres URL: postgres://{{ db_host}}:{{ db_port }}"
 
     - name: Drop vetzuki database
       when: db_reset
@@ -208,13 +213,26 @@
         positional_args:
           - "{{ exam.name }}"
           - "{{ exam.description }}"
-    - name: Create .env file
-      copy:
-        dest: "{{ vetzuki_project_root }}/.env"
-        content: |
-          LDAP_HOST=localhost:389
-          DB_HOST={{ db_host }}
-          DB_PORT={{ db_port }}
-          DB_NAME=vetzuki
-          DB_USERNAME={{ rds.username }}
-          DB_PASSWORD={{ rds.password }}
+
+# Setup local LDAP connection
+#- hosts: localhost
+#  vars:
+#    vetzuki_environment: poc
+#    vetzuki_go_project: "github.com/vetzuki/vetzuki"
+#    vetzuki_project_root: "{{ ansible_user_dir }}/development/go/src/{{ vetzuki_go_project }}"
+#    rds:
+#      username: vetzuki
+#      password: vetzuk1p0c
+#  tasks:
+#    - include_role:
+#        name: rds
+#    - name: Create .env file
+#      copy:
+#        dest: "{{ vetzuki_project_root }}/.env"
+#        content: |
+#          LDAP_HOST=localhost:389
+#          DB_HOST={{ db_host }}
+#          DB_PORT={{ db_port }}
+#          DB_NAME=vetzuki
+#          DB_USERNAME={{ rds.username }}
+#          DB_PASSWORD={{ rds.password }}

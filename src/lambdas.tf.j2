@@ -6,12 +6,20 @@ resource "aws_lambda_function" "getProspectLambda" {
     handler = "handler"
     runtime = "go1.x"
     source_code_hash = "${filebase64sha256("getProspect/lambda.zip")}"
+    timeout = 10
+    vpc_config {
+      subnet_ids = [
+        "{{ subnet[vetzuki_environment].a }}",
+        "{{ subnet[vetzuki_environment].b }}"
+      ]
+      security_group_ids = ["{{ db_security_group[vetzuki_environment] }}"]
+    }
     environment {
       variables = {
         SSH_URL = "ssh.${var.vetzukiEnvironment}.vetzuki.com"
         DB_HOST = "db.${var.vetzukiEnvironment}.vetzuki.com"
         DB_PORT = "${var.db_port}"
-        DB_USER = "${var.db_user}"
+        DB_USERNAME = "${var.db_user}"
         DB_PASSWORD = "${var.db_password}"
         DB_NAME = "${var.db_name}"
 
@@ -26,12 +34,20 @@ resource "aws_lambda_function" "createProspect" {
     handler = "handler"
     runtime = "go1.x"
     source_code_hash = "${filebase64sha256("createProspect/lambda.zip")}"
+    timeout = 10
+    vpc_config {
+      subnet_ids = [
+        "{{ subnet[vetzuki_environment].a }}",
+        "{{ subnet[vetzuki_environment].b }}"
+      ]
+      security_group_ids = ["{{ db_security_group[vetzuki_environment] }}"]
+    }
     environment {
       variables = {
         SSH_URL = "ssh.${var.vetzukiEnvironment}.vetzuki.com"
         DB_HOST = "db.${var.vetzukiEnvironment}.vetzuki.com"
         DB_PORT = "${var.db_port}"
-        DB_USER = "${var.db_user}"
+        DB_USERNAME = "${var.db_user}"
         DB_PASSWORD = "${var.db_password}"
         DB_NAME = "${var.db_name}"
       }

@@ -50,6 +50,11 @@ resource "aws_iam_role_policy_attachment" "getProspectLambdaCloudWatchPolicy" {
   role = "${aws_iam_role.lambdaRole.name}"
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
+# GetProspect: Allow execution on VPC
+resource "aws_iam_role_policy_attachment" "getProspectLambdaVPCAccess" {
+  role = "${aws_iam_role.lambdaRole.name}"
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+}
 
 # CreateProspect: Allow role to send email
 resource "aws_iam_policy" "emailSenderPolicy" {
