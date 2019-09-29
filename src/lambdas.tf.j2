@@ -7,10 +7,14 @@ resource "aws_lambda_function" "getProspectLambda" {
     runtime = "go1.x"
     source_code_hash = "${filebase64sha256("getProspect/lambda.zip")}"
     timeout = 10
+    depends_on = [
+      "aws_subnet.privateA",
+      "aws_subnet.privateB"
+    ]
     vpc_config {
       subnet_ids = [
-        "{{ subnet[vetzuki_environment].a }}",
-        "{{ subnet[vetzuki_environment].b }}"
+        "${aws_subnet.privateA.id}",
+        "${aws_subnet.privateB.id}"
       ]
       security_group_ids = ["{{ db_security_group[vetzuki_environment] }}"]
     }
@@ -18,6 +22,7 @@ resource "aws_lambda_function" "getProspectLambda" {
       variables = {
         LDAP_HOST = "{{ ldap[vetzuki_environment].host }}"
         BASE_DN = "{{ ldap[vetzuki_environment].base_dn }}"
+        GROUPS_DN = "{{ ldap[vetzuki_environment].groups_dn }}"
         BIND_DN = "{{ ldap[vetzuki_environment].bind_dn }}"
         BIND_PASSWORD = "{{ ldap[vetzuki_environment].bind_password }}"
         VETZUKI_ENVIRONMENT = "{{ vetzuki_environment }}"
@@ -43,10 +48,14 @@ resource "aws_lambda_function" "createProspect" {
     runtime = "go1.x"
     source_code_hash = "${filebase64sha256("createProspect/lambda.zip")}"
     timeout = 10
+    depends_on = [
+      "aws_subnet.privateA",
+      "aws_subnet.privateB"
+    ]
     vpc_config {
       subnet_ids = [
-        "{{ subnet[vetzuki_environment].a }}",
-        "{{ subnet[vetzuki_environment].b }}"
+        "${aws_subnet.privateA.id}",
+        "${aws_subnet.privateB.id}"
       ]
       security_group_ids = ["{{ db_security_group[vetzuki_environment] }}"]
     }
@@ -54,6 +63,7 @@ resource "aws_lambda_function" "createProspect" {
       variables = {
         LDAP_HOST = "{{ ldap[vetzuki_environment].host }}"
         BASE_DN = "{{ ldap[vetzuki_environment].base_dn }}"
+        GROUPS_DN = "{{ ldap[vetzuki_environment].groups_dn }}"
         BIND_DN = "{{ ldap[vetzuki_environment].bind_dn }}"
         BIND_PASSWORD = "{{ ldap[vetzuki_environment].bind_password }}"
         VETZUKI_ENVIRONMENT = "{{ vetzuki_environment }}"

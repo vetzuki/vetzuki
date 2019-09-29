@@ -1,0 +1,52 @@
+resource "aws_eip" "natGW" {
+    vpc = true
+    tags = {
+        Name = "{{ vetzuki_environment }}-natgw-a"
+    }
+}
+
+resource "aws_subnet" "privateA" {
+    vpc_id = "{{ vpc[vetzuki_environment] }}"
+    cidr_block = "{{ subnets[vetzuki_environment].a.cidr }}"
+    availability_zone = "{{ subnets[vetzuki_environment].a.az }}"
+    tags = {
+        Name = "{{ vetzuki_environment }}-private-a"
+    }
+}
+
+resource "aws_subnet" "privateB" {
+    vpc_id = "{{ vpc[vetzuki_environment] }}"
+    cidr_block = "{{ subnets[vetzuki_environment].b.cidr }}"
+    availability_zone = "{{ subnets[vetzuki_environment].b.az }}"
+    tags = {
+        Name = "{{ vetzuki_environment }}-private-b"
+    }
+}
+
+# Must associate with Public subnet (subnet with IGW)
+resource "aws_nat_gateway" "natGW" {
+    allocation_id = "${aws_eip.natGW.id}"
+    subnet_id = "{{ subnet[vetzuki_environment].public }}"
+    tags = {
+        Name = "{{ vetzuki_environment }}-gw-a"
+    }
+}
+resource "aws_route_table" "private" {
+    vpc_id = "{{ vpc[vetzuki_environment] }}"
+    tags = {
+        Name = "{{ vetzuki_environment }}-private"
+    }
+}
+resource "aws_route" "private" {
+    route_table_id = "${aws_route_table.private.id}"
+    destination_cidr_block = "0.0.0.0/0"
+    nat_gateway_id = "${aws_nat_gateway.natGW.id}"
+}
+resource "aws_route_table_association" "privateA" {
+    subnet_id = "${aws_subnet.privateA.id}"
+    route_table_id = "${aws_route_table.private.id}"
+}
+resource "aws_route_table_association" "privateB" {
+    subnet_id = "${aws_subnet.privateB.id}"
+    route_table_id = "${aws_route_table.private.id}"
+}
