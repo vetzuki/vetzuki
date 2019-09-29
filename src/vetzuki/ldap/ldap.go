@@ -16,6 +16,7 @@ const (
 	unlimitedSize    = 0
 	tlsPort          = "636"
 	envBindDN        = "BIND_DN"
+	envGroupsDN      = "GROUPS_DN"
 	envBindPassword  = "BIND_PASSWORD"
 	envBaseDN        = "BASE_DN"
 	envLDAPHost      = "LDAP_HOST"
@@ -27,7 +28,7 @@ var (
 	bindDN                  = ""
 	bindPassword            = ""
 	environment             = "development"
-	baseDN                  = fmt.Sprintf("ou=prospect,dc=%s, dc=vetzuki,dc=com", environment)
+	baseDN                  = fmt.Sprintf("ou=prospect,dc=%s,dc=vetzuki,dc=com", environment)
 	groupsDN                = fmt.Sprintf("ou=groups,dc=%s,dc=vetzuki,dc=com", environment)
 	tlsNoVerify             = &tls.Config{InsecureSkipVerify: true}
 	prospectQueryAttributes = []string{"dn"}
@@ -46,6 +47,10 @@ func ConfigureConnection(base, bind, password string) {
 
 // Connect - Connect to an LDAP server over TLS on the default port
 func Connect() *ldap.Conn {
+	// TODO: This initialization is messed up
+	if b := os.Getenv(envEnvironment); len(b) > 0 {
+		environment = b
+	}
 	if b := os.Getenv(envBindDN); len(b) > 0 {
 		bindDN = b
 	}
@@ -54,6 +59,9 @@ func Connect() *ldap.Conn {
 	}
 	if b := os.Getenv(envBaseDN); len(b) > 0 {
 		baseDN = b
+	}
+	if b := os.Getenv(envGroupsDN); len(b) > 0 {
+		groupsDN = b
 	}
 	if b := os.Getenv(envLDAPHost); len(b) > 0 {
 		ldapHost = b
@@ -144,6 +152,7 @@ func FindProspect(c *ldap.Conn, prospectURL string) (*User, bool) {
 
 // CreateProspect : Create prospect given an prospectURL
 func CreateProspect(c *ldap.Conn, prospectURL string) (*User, bool) {
+	log.Printf("debug: creating prospect %s in LDAP", prospectURL)
 	var user *User
 	dn := prospectDN(prospectURL)
 
@@ -163,7 +172,7 @@ func CreateProspect(c *ldap.Conn, prospectURL string) (*User, bool) {
 		log.Printf("error: failed to generate user password: %s", err)
 		return user, false
 	}
-
+	log.Printf("debug: created uid %s for %s", uidNumber, prospectURL)
 	prospect := ldap.NewAddRequest(dn, nil)
 	prospect.Attribute("uid", []string{prospectURL})
 	prospect.Attribute("cn", []string{prospectURL})
@@ -186,11 +195,13 @@ func CreateProspect(c *ldap.Conn, prospectURL string) (*User, bool) {
 		GID:  uidNumber,
 		CN:   prospectURL,
 	}
+	log.Printf("debug: adding %s to docker group", user.Name)
 	_, ok := AddGroupMember(c, "docker", user)
 	if !ok {
 		log.Printf("error: failed to add user %s to docker group", user.Name)
 		return nil, false
 	}
+	log.Printf("debug: created new prospect %s", prospectURL)
 	return user, true
 }
 
@@ -215,11 +226,13 @@ func groupDN(groupName string) string {
 
 // AddGroupMember : Add a User to a group
 func AddGroupMember(c *ldap.Conn, groupName string, user *User) (*Group, bool) {
+	log.Printf("debug: adding %s to group %s", user.Name, groupName)
 	dn := groupDN(groupName)
 	if err := c.Bind(bindDN, bindPassword); err != nil {
 		log.Printf("error: failed to bind: %s", err)
 		return nil, false
 	}
+	log.Printf("debug: adding memberUID %s to %s", user.UID, dn)
 	request := ldap.NewModifyRequest(dn, nil)
 	request.Add("memberUid", []string{user.UID})
 	err := c.Modify(request)
@@ -227,11 +240,13 @@ func AddGroupMember(c *ldap.Conn, groupName string, user *User) (*Group, bool) {
 		log.Printf("error: failed to add %s to group %s: %s", user.Name, groupName, err)
 		return nil, false
 	}
+	log.Printf("debug: added %s to %s", user.Name, groupName)
 	return GetGroup(c, groupName)
 }
 
 // GetGroup : Get a group
 func GetGroup(c *ldap.Conn, groupName string) (*Group, bool) {
+	log.Printf("debug: getting group %s", groupName)
 	dn := groupDN(groupName)
 	if err := c.Bind(bindDN, bindPassword); err != nil {
 		log.Printf("error: failed to bind: %s", err)
@@ -267,6 +282,7 @@ func GetGroup(c *ldap.Conn, groupName string) (*Group, bool) {
 
 // RemoveGroupMember : Remove member from group
 func RemoveGroupMember(c *ldap.Conn, groupName string, user *User) bool {
+	log.Printf("debug: removing %s from %s", user.Name, groupName)
 	dn := groupDN(groupName)
 	if err := c.Bind(bindDN, bindPassword); err != nil {
 		log.Printf("error: failed to bind: %s", err)
