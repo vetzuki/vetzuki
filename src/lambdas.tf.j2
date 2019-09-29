@@ -16,6 +16,14 @@ resource "aws_lambda_function" "getProspectLambda" {
     }
     environment {
       variables = {
+        LDAP_HOST = "{{ ldap[vetzuki_environment].host }}"
+        BASE_DN = "{{ ldap[vetzuki_environment].base_dn }}"
+        BIND_DN = "{{ ldap[vetzuki_environment].bind_dn }}"
+        BIND_PASSWORD = "{{ ldap[vetzuki_environment].bind_password }}"
+        VETZUKI_ENVIRONMENT = "{{ vetzuki_environment }}"
+        REDIS_HOST = "{{ redis[vetzuki_environment].host }}"
+        REDIS_PASSWORD = "{{ redis[vetzuki_environment].password }}"
+        REDIS_DB = "{{ redis[vetzuki_environment].db }}"
         SSH_URL = "ssh.${var.vetzukiEnvironment}.vetzuki.com"
         DB_HOST = "db.${var.vetzukiEnvironment}.vetzuki.com"
         DB_PORT = "${var.db_port}"
@@ -44,6 +52,14 @@ resource "aws_lambda_function" "createProspect" {
     }
     environment {
       variables = {
+        LDAP_HOST = "{{ ldap[vetzuki_environment].host }}"
+        BASE_DN = "{{ ldap[vetzuki_environment].base_dn }}"
+        BIND_DN = "{{ ldap[vetzuki_environment].bind_dn }}"
+        BIND_PASSWORD = "{{ ldap[vetzuki_environment].bind_password }}"
+        VETZUKI_ENVIRONMENT = "{{ vetzuki_environment }}"
+        REDIS_HOST = "{{ redis[vetzuki_environment].host }}"
+        REDIS_PASSWORD = "{{ redis[vetzuki_environment].password }}"
+        REDIS_DB = "{{ redis[vetzuki_environment].db }}"
         SSH_URL = "ssh.${var.vetzukiEnvironment}.vetzuki.com"
         DB_HOST = "db.${var.vetzukiEnvironment}.vetzuki.com"
         DB_PORT = "${var.db_port}"
