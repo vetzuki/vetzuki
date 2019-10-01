@@ -19,14 +19,14 @@ type JWTClaims struct {
 
 // ValidateToken : Validate an auth0 opaque access
 // token. Validation returns a JWT profile.
-func ValidateToken(accessToken string) bool {
+func ValidateToken(accessToken string) (*JWTClaims, bool) {
 	accessToken = strings.TrimSpace(accessToken)
 	accessTokenValidationURL := "https://vetzuki-poc.auth0.com/userinfo"
 	log.Printf("debug: validating token %s against %s", accessToken, accessTokenValidationURL)
 	r, err := http.NewRequest("GET", accessTokenValidationURL, nil)
 	if err != nil {
 		log.Printf("error: unable to create accessToken validation request:%s", err)
-		return false
+		return nil, false
 	}
 	r.Header.Add("Authorization", fmt.Sprintf("Bearer %s", accessToken))
 	r.Header.Add("Content-Type", "application/json")
@@ -34,7 +34,7 @@ func ValidateToken(accessToken string) bool {
 	response, err := http.DefaultClient.Do(r)
 	if err != nil {
 		log.Printf("error: accessToken validation request failed: %s", err)
-		return false
+		return nil, false
 	}
 
 	if response.StatusCode != 200 {
@@ -43,7 +43,7 @@ func ValidateToken(accessToken string) bool {
 		if b, err := ioutil.ReadAll(response.Body); err == nil {
 			log.Printf("error: response message: %s", string(b))
 		}
-		return false
+		return nil, false
 	}
 	log.Printf("debug: decoding auth0 response")
 	decoder := json.NewDecoder(response.Body)
@@ -53,5 +53,21 @@ func ValidateToken(accessToken string) bool {
 	} else {
 		log.Printf("debug: allowing access for %s", jwtClaims.Email)
 	}
-	return true
+	return &jwtClaims, true
+}
+
+const authorizationHeader = "Authorization"
+
+// ExtractToken : Extract a token from an HTTP.Request header
+func ExtractToken(headers map[string]string) (string, bool) {
+	log.Printf("debug: extracting token from headers")
+	ah, ok := headers[authorizationHeader]
+	if !ok {
+		log.Printf("warning: no authorization header found")
+		return ah, false
+	}
+	if strings.HasPrefix(ah, "Bearer ") {
+		return strings.TrimSpace(strings.TrimPrefix(ah, "Bearer ")), true
+	}
+	return strings.TrimSpace(ah), true
 }
