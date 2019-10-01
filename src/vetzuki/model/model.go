@@ -112,6 +112,11 @@ func GetProspect(prospectURL string) (*Prospect, bool) {
 func GetEmployer(id int64) (*Employer, bool) {
 	return findEmployerByID(id)
 }
+
+// GetEmployerByEmail : Get an employer by email
+func GetEmployerByEmail(email string) (*Employer, bool) {
+	return findEmployer(email)
+}
 func createEmployerProspect(employerExam *EmployerExam, prospect *Prospect) (*EmployerProspect, bool) {
 	log.Printf("debug: exam %d for %s", employerExam.ExamID, prospect.Email)
 	ep := &EmployerProspect{
