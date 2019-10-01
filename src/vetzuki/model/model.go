@@ -97,7 +97,10 @@ func CreateEmployerProspect(employerID, examID int64, name, email, role string) 
 		return nil, false
 	}
 	log.Printf("debug: created LDAP user %s", user.DN)
-	return createEmployerProspect(employerExam, prospect)
+	ep, ok := createEmployerProspect(employerExam, prospect)
+	ep.Prospect = prospect
+	ep.Employer = employer
+	return ep, ok
 }
 
 // GetProspect : Get a prospect by their URL
@@ -348,4 +351,6 @@ type EmployerProspect struct {
 	ProspectID     int64 `sql:"prospect_id" json:"prospectID"`
 	EmployerID     int64 `sql:"employer_id" json:"employerID"`
 	EmployerExamID int64 `sql:"employer_exam_id" json:"employerExamID"`
+	*Prospect      `json:"prospect"`
+	*Employer      `json:"employer"`
 }
