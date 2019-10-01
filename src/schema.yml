@@ -12,14 +12,15 @@
       - name: billing
         columns:
           - id bigserial primary key
+          - email text NOT NULL
       - name: employer
         columns:
           - id bigserial primary key
-          - name text not null
-          - email text unique not null
-          - billing_email text not null
+          - name text NOT NULL
+          - email text unique NOT NULL
+          - billing_email text NOT NULL
           - billing_id bigint references billing(id)
-          - billing_state int # 0:Paid, 1:Pending, 2:Owes, 3:Unconfirmed, 4:OneTime
+          - billing_state int NOT NULL # 0:Paid, 1:Pending, 2:Owes, 3:Unconfirmed, 4:OneTime
           - created TIMESTAMPTZ NOT NULL DEFAULT NOW()
           - modified TIMESTAMPTZ NOT NULL DEFAULT NOW()
       - name: exam

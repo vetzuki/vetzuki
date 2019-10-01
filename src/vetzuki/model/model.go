@@ -281,7 +281,7 @@ func findEmployer(email string) (*Employer, bool) {
 	log.Printf("debug: finding %s", email)
 	employer := &Employer{Email: email}
 	row := connection.QueryRow(`
-	  SELECT id,name,billing_email, billing_state, created, modified
+	  SELECT id,email,name,billing_email, billing_state, created, modified
 	  FROM employer
 	  WHERE email = $1`,
 		email,
@@ -293,6 +293,7 @@ func findEmployer(email string) (*Employer, bool) {
 	err := row.Scan(
 		&employer.ID,
 		&employer.Name,
+		&employer.Email,
 		&employer.BillingEmail,
 		&employer.BillingState,
 		&employer.Created,

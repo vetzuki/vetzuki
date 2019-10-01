@@ -12,3 +12,9 @@ own_config
 
 sslroot
 .env
+node_modules
+
+handler
+lambda.zip
+
+**/.vscode

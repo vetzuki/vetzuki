@@ -80,10 +80,66 @@ resource "aws_lambda_function" "createProspect" {
     }
 }
 
+resource "aws_lambda_function" "employerLogin" {
+    filename = "employerLogin/lambda.zip"
+    function_name = "employerLogin-${var.vetzukiEnvironment}"
+    role = "${aws_iam_role.lambdaRole.arn}"
+    handler = "handler"
+    runtime = "go1.x"
+    source_code_hash = "${filebase64sha256("employerLogin/lambda.zip")}"
+    timeout = 10
+    depends_on = [
+      "aws_subnet.privateA",
+      "aws_subnet.privateB"
+    ]
+    vpc_config {
+      subnet_ids = [
+        "${aws_subnet.privateA.id}",
+        "${aws_subnet.privateB.id}"
+      ]
+      security_group_ids = ["{{ db_security_group[vetzuki_environment] }}"]
+    }
+    environment {
+      variables = {
+        LDAP_HOST = "{{ ldap[vetzuki_environment].host }}"
+        BASE_DN = "{{ ldap[vetzuki_environment].base_dn }}"
+        GROUPS_DN = "{{ ldap[vetzuki_environment].groups_dn }}"
+        BIND_DN = "{{ ldap[vetzuki_environment].bind_dn }}"
+        BIND_PASSWORD = "{{ ldap[vetzuki_environment].bind_password }}"
+        VETZUKI_ENVIRONMENT = "{{ vetzuki_environment }}"
+        REDIS_HOST = "{{ redis[vetzuki_environment].host }}"
+        REDIS_PASSWORD = "{{ redis[vetzuki_environment].password }}"
+        REDIS_DB = "{{ redis[vetzuki_environment].db }}"
+        SSH_URL = "ssh.${var.vetzukiEnvironment}.vetzuki.com"
+        DB_HOST = "db.${var.vetzukiEnvironment}.vetzuki.com"
+        DB_PORT = "${var.db_port}"
+        DB_USERNAME = "${var.db_user}"
+        DB_PASSWORD = "${var.db_password}"
+        DB_NAME = "${var.db_name}"
+      }
+    }
+}
+
 # CreateProspect : Allow APIGateway to execute CreateProspect Lambda
 resource "aws_lambda_permission" "createProspect" {
     statement_id = "AllowExecutionFromAPIGateway"
     action = "lambda:InvokeFunction"
     function_name = "${aws_lambda_function.createProspect.function_name}"
+    principal = "apigateway.amazonaws.com"
+}
+
+# CreateProspect : Allow APIGateway to execute EmployerLogin Lambda
+resource "aws_lambda_permission" "employerLogin" {
+    statement_id = "AllowExecutionFromAPIGateway"
+    action = "lambda:InvokeFunction"
+    function_name = "${aws_lambda_function.employerLogin.function_name}"
+    principal = "apigateway.amazonaws.com"
+}
+
+# GetProspect: Allow APIGateway to invoke Lambda
+resource "aws_lambda_permission" "getProspectLambdaPermission" {
+    statement_id = "AllowExecutionFromAPIGateway"
+    action = "lambda:InvokeFunction"
+    function_name = "${aws_lambda_function.getProspectLambda.function_name}"
     principal = "apigateway.amazonaws.com"
 }
