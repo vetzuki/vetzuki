@@ -40,6 +40,16 @@ func TestFindEmployer(t *testing.T) {
 	}
 }
 
+func TestFindEmployerProspects(t *testing.T) {
+	Connect()
+	email := "recruiter@employer1.com"
+	employer := &Employer{ID: 1, Email: email}
+	_, ok := employer.FindProspects()
+	if !ok {
+		t.Fatalf("expected to find prospects but failed")
+	}
+}
+
 func TestFindExamByID(t *testing.T) {
 	Connect()
 	e, ok := findExamByID(int64(1))

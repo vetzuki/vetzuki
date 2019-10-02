@@ -217,17 +217,53 @@ func findProspectByID(id int64) (*Prospect, bool) {
 	}
 	return prospect, true
 }
+
+// FindProspects : Find prospects associated with the Employer
+func (e *Employer) FindProspects() ([]*Prospect, bool) {
+	log.Printf("debug: finding %s prospects", e.Email)
+	rows, err := connection.Query(`
+	select id, name, email, url, employer_id, created, modified, role, screening_state
+	FROM prospect
+	WHERE employer_id = $1`, e.ID)
+	if err != nil {
+		log.Printf("error: failed to find prospects for employer %s: %s", e.Email, err)
+		return nil, false
+	}
+	defer rows.Close()
+	prospects := []*Prospect{}
+	for rows.Next() {
+		prospect := &Prospect{}
+		err := rows.Scan(
+			&prospect.ID,
+			&prospect.Name,
+			&prospect.Email,
+			&prospect.URL,
+			&prospect.EmployerID,
+			&prospect.Created,
+			&prospect.Modified,
+			&prospect.Role,
+			&prospect.ScreeningState,
+		)
+		if err != nil {
+			log.Printf("error: unable to scan into prospect: %s", err)
+			return nil, false
+		}
+		prospects = append(prospects, prospect)
+	}
+	return prospects, true
+}
 func findProspect(prospectURL string) (*Prospect, bool) {
 	log.Printf("debug: finding prospect %s", prospectURL)
 	prospect := &Prospect{URL: prospectURL}
 	err := connection.QueryRow(`
-	SELECT id,name, email, role, employer_name, employer_id, employer_exam_id, created, modified
+	SELECT id,name, email, role, screening_state, employer_name, employer_id, employer_exam_id, created, modified
 	FROM prospect
 	WHERE url = $1`, prospectURL).Scan(
 		&prospect.ID,
 		&prospect.Name,
 		&prospect.Email,
 		&prospect.Role,
+		&prospect.ScreeningState,
 		&prospect.EmployerName,
 		&prospect.EmployerID,
 		&prospect.EmployerExamID,
@@ -281,7 +317,7 @@ func findEmployer(email string) (*Employer, bool) {
 	log.Printf("debug: finding %s", email)
 	employer := &Employer{Email: email}
 	row := connection.QueryRow(`
-	  SELECT id,email,name,billing_email, billing_state, created, modified
+	  SELECT id, name, email,billing_email, billing_state, created, modified
 	  FROM employer
 	  WHERE email = $1`,
 		email,
@@ -345,6 +381,7 @@ type Prospect struct {
 	Modified       time.Time `sql:"modified" json:"modified"`
 	Role           string    `sql:"role" json:"role"`
 	EmployerName   string    `sql:"employer_name" json:"employerName"`
+	ScreeningState int       `sql:"screening_state" json:"screeningState"`
 	Name           string    `sql:"name" json:"name"`
 	Email          string    `sql:"email" json:"email"`
 	URL            string    `sql:"url" json:"url"`
