@@ -45,6 +45,7 @@
           - email text
           - url text unique NOT NULL
           - role text NOT NULL # job role
+          - screening_state int NOT NULL DEFAULT 0 # 0: unconfirmed, 1: confirmed, 2: active, 3: complete
           - employer_name text NOT NULL 
           - employer_id bigint references employer(id)
           - employer_exam_id bigint references employer_exam(id)
