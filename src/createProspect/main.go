@@ -35,9 +35,9 @@ type ScreeningRequest struct {
 
 // ScreeningResponse : Response body payload for a success
 type ScreeningResponse struct {
-	EmployerProspect *model.EmployerProspect
-	Name             string `json:"name"`
-	Email            string `json:"email"`
+	EmployerProspect *model.EmployerProspect `json:"employerProspect"`
+	Name             string                  `json:"name"`
+	Email            string                  `json:"email"`
 }
 
 const (
@@ -149,7 +149,7 @@ func CreateProspect(ctx context.Context, r events.APIGatewayProxyRequest) (event
 		return invalidPayload, err
 	}
 
-	log.Printf("debug : creating %d for employer %s", screening.Email, screening.EmployerID)
+	log.Printf("debug : creating %s for employer %d", screening.Email, screening.EmployerID)
 	employerProspect, ok := model.CreateEmployerProspect(
 		screening.EmployerID,
 		defaultExam,

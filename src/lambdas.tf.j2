@@ -35,6 +35,7 @@ resource "aws_lambda_function" "getProspectLambda" {
         DB_USERNAME = "${var.db_user}"
         DB_PASSWORD = "${var.db_password}"
         DB_NAME = "${var.db_name}"
+        ADMIN_WHITELIST = "{{ adminWhitelist | join(',') }}"
 
       }
     }
@@ -77,6 +78,7 @@ resource "aws_lambda_function" "getProspects" {
         DB_USERNAME = "${var.db_user}"
         DB_PASSWORD = "${var.db_password}"
         DB_NAME = "${var.db_name}"
+        ADMIN_WHITELIST = "{{ adminWhitelist | join(',') }}"
       }
     }
 }
@@ -118,6 +120,7 @@ resource "aws_lambda_function" "createProspect" {
         DB_USERNAME = "${var.db_user}"
         DB_PASSWORD = "${var.db_password}"
         DB_NAME = "${var.db_name}"
+        ADMIN_WHITELIST = "{{ adminWhitelist | join(',') }}"
       }
     }
 }
@@ -159,6 +162,7 @@ resource "aws_lambda_function" "employerLogin" {
         DB_USERNAME = "${var.db_user}"
         DB_PASSWORD = "${var.db_password}"
         DB_NAME = "${var.db_name}"
+        ADMIN_WHITELIST = "{{ adminWhitelist | join(',') }}"
       }
     }
 }

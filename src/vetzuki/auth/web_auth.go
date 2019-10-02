@@ -6,7 +6,16 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 	"strings"
+)
+
+const (
+	envAdminWhitelist = "ADMIN_WHITELIST"
+)
+
+var (
+	adminWhitelist = []string{}
 )
 
 // JWTClaims : Claims in JWT
@@ -15,6 +24,32 @@ type JWTClaims struct {
 	Audience string `json:"aud"`
 	Name     string `json:"name"`
 	Email    string `json:"email"`
+}
+
+func init() {
+	if w := os.Getenv(envAdminWhitelist); len(w) > 0 {
+		members := strings.Split(w, ",")
+		for _, member := range members {
+			if len(strings.TrimSpace(member)) == 0 {
+				continue
+			}
+			log.Printf("debug: whitelisting admin %s", member)
+			adminWhitelist = append(adminWhitelist, strings.TrimSpace(member))
+		}
+		log.Printf("info: whitelisted %d admins", len(adminWhitelist))
+	}
+}
+func checkAdminWhitelist(jwtClaims JWTClaims) bool {
+	if len(adminWhitelist) == 0 {
+		return true
+	}
+	for _, admin := range adminWhitelist {
+		if jwtClaims.Email == admin {
+			return true
+		}
+	}
+	log.Printf("warning: %s is not authorized by whitelist", jwtClaims.Email)
+	return false
 }
 
 // ValidateToken : Validate an auth0 opaque access
@@ -50,9 +85,14 @@ func ValidateToken(accessToken string) (*JWTClaims, bool) {
 	var jwtClaims JWTClaims
 	if err := decoder.Decode(&jwtClaims); err != nil {
 		log.Printf("warning: unable to parse jwt claims: %s", err)
-	} else {
-		log.Printf("debug: allowing access for %s", jwtClaims.Email)
 	}
+	ok := checkAdminWhitelist(jwtClaims)
+	if !ok {
+		log.Printf("warning: unauthorized admin %s", jwtClaims.Email)
+		return nil, false
+	}
+	log.Printf("debug: allowing access for %s", jwtClaims.Email)
+
 	return &jwtClaims, true
 }
 
