@@ -19,7 +19,6 @@ import (
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ses"
-	"strconv"
 	// "github.com/aws/aws-sdk-go/service/s3"
 	"github.com/vetzuki/vetzuki/auth"
 	"github.com/vetzuki/vetzuki/model"
@@ -31,13 +30,14 @@ type ScreeningRequest struct {
 	Name       string `json:"name"`
 	Role       string `json:"role"`
 	Email      string `json:"email"`
-	EmployerID string `json:"employerID"`
+	EmployerID int64  `json:"employerID"`
 }
 
 // ScreeningResponse : Response body payload for a success
 type ScreeningResponse struct {
 	EmployerProspect *model.EmployerProspect
-	Name, Email      string
+	Name             string `json:"name"`
+	Email            string `json:"email"`
 }
 
 const (
@@ -143,26 +143,22 @@ func CreateProspect(ctx context.Context, r events.APIGatewayProxyRequest) (event
 	var screening ScreeningRequest
 	log.Printf("debug: create prospect request %#v\n", r.Body)
 	err := json.Unmarshal([]byte(r.Body), &screening)
-	log.Printf("debug: creating employer %s screening for %s", screening.EmployerID, screening.Email)
+	log.Printf("debug: creating employer %d screening for %s", screening.EmployerID, screening.Email)
 	if err != nil {
 		log.Printf("error: failed to unmarshal JSON: %s", err)
 		return invalidPayload, err
 	}
-	employerID, err := strconv.ParseInt(screening.EmployerID, 10, 64)
-	if err != nil {
-		log.Printf("error : unable to convert %s to int64: %s", screening.EmployerID, err)
-		return invalidPayload, err
-	}
-	log.Printf("debug : creating %s for employer %s", screening.Email, screening.EmployerID)
+
+	log.Printf("debug : creating %d for employer %s", screening.Email, screening.EmployerID)
 	employerProspect, ok := model.CreateEmployerProspect(
-		employerID,
+		screening.EmployerID,
 		defaultExam,
 		screening.Name,
 		screening.Email,
 		screening.Role,
 	)
 	if !ok {
-		log.Printf("error: unable to create screening for %s with employer %d", screening.Email, employerID)
+		log.Printf("error: unable to create screening for %s with employer %d", screening.Email, screening.EmployerID)
 		return serverError, err
 	}
 	if !sendEmail(screening.Email, employerProspect.Prospect.URL) {
@@ -177,7 +173,7 @@ func CreateProspect(ctx context.Context, r events.APIGatewayProxyRequest) (event
 	encoder := json.NewEncoder(&body)
 	log.Printf("debug: creating screening response")
 	if err := encoder.Encode(&response); err != nil {
-		log.Printf("error : unable to encode prospect %s for employer %d to json: %s", screening.Email, employerID, err)
+		log.Printf("error : unable to encode prospect %s for employer %d to json: %s", screening.Email, screening.EmployerID, err)
 		return serverError, err
 	}
 	log.Printf("debug: responding with %s", body.String())
