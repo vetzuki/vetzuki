@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"github.com/joho/godotenv"
-	_ "github.com/lib/pq"
+	_ "github.com/lib/pq" // Side effects only
 	"github.com/rs/xid"
 	"github.com/vetzuki/vetzuki/ldap"
 
@@ -106,6 +106,12 @@ func CreateEmployerProspect(employerID, examID int64, name, email, role string) 
 // GetProspect : Get a prospect by their URL
 func GetProspect(prospectURL string) (*Prospect, bool) {
 	return findProspect(prospectURL)
+}
+
+// SetPassword : Set prospect password
+func (p *Prospect) SetPassword() (string, bool) {
+	c := ldap.Connect()
+	return ldap.SetProspectPassword(c, p.URL)
 }
 
 // GetEmployer : Get an employer by ID
@@ -218,6 +224,35 @@ func findProspectByID(id int64) (*Prospect, bool) {
 	return prospect, true
 }
 
+const (
+	// ScreeningStateUnconfirmed : Employer create, email link unfollowed
+	ScreeningStateUnconfirmed = 0
+	// ScreeningStateConfirmed : Link redeemed
+	ScreeningStateConfirmed = 1
+	// ScreeningStateActive : Login completed
+	ScreeningStateActive = 2
+	// ScreeningStateComplete : Teesh shell exited
+	ScreeningStateComplete = 3
+)
+
+// SetScreeningState : Set the screening state of a prospect
+func (p *Prospect) SetScreeningState(state int) bool {
+	log.Printf("debug: setting %s state to %d", p.URL, state)
+	p.ScreeningState = state
+	err := connection.QueryRow(`
+	UPDATE prospect
+	SET screening_state = $1
+	WHERE url = $2
+	RETURNING id`,
+		p.ScreeningState,
+		p.URL).Scan(&p.ID)
+	if err != nil {
+		log.Printf("error: updating %s screening state to %d: %s", p.URL, state, err)
+		return false
+	}
+	return true
+}
+
 // FindProspects : Find prospects associated with the Employer
 func (e *Employer) FindProspects() ([]*Prospect, bool) {
 	log.Printf("debug: finding %s prospects", e.Email)
@@ -274,6 +309,7 @@ func findProspect(prospectURL string) (*Prospect, bool) {
 		log.Printf("error : failed to locate prospect %s: %s", prospectURL, err)
 		return nil, false
 	}
+	log.Printf("debug: found prospect %s by %s", prospect.Email, prospect.URL)
 	return prospect, true
 }
 func findExamByID(id int64) (*Exam, bool) {

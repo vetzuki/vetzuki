@@ -50,6 +50,17 @@ func TestFindEmployerProspects(t *testing.T) {
 	}
 }
 
+func TestSetPassword(t *testing.T) {
+	prospect := &Prospect{URL: "prospect1"}
+	p, ok := prospect.SetPassword()
+	if !ok {
+		t.Fatalf("expected to set user password")
+	}
+	if len(p) == 0 {
+		t.Fatalf("expected user password to be longer than 0 characters")
+	}
+}
+
 func TestFindExamByID(t *testing.T) {
 	Connect()
 	e, ok := findExamByID(int64(1))

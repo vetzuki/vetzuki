@@ -43,11 +43,13 @@ type ScreeningResponse struct {
 const (
 	defaultExam = int64(1)
 	sender      = "hello@poc.vetzuki.com"
-	redeemURL   = "http://www.poc.vetzuki.com/p"
+	redeemURL   = "https://www.poc.vetzuki.com/p"
 	htmlMessage = `
 	<html>
 	<body>
-	<a href="%s/%s">%s/%s</a>
+	Someone's excited to get to know you! There's a screening waiting for you.
+	<p>Follow the link below to get started.
+	<p><a href="%s/%s">%s/%s</a>
 	</body>
 	</html>`
 	textMessage = `

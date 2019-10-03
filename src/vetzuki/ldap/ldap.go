@@ -196,10 +196,12 @@ func CreateProspect(c *ldap.Conn, prospectURL string) (*User, bool) {
 		CN:   prospectURL,
 	}
 	log.Printf("debug: adding %s to docker group", user.Name)
-	_, ok := AddGroupMember(c, "docker", user)
-	if !ok {
-		log.Printf("error: failed to add user %s to docker group", user.Name)
-		return nil, false
+	if !IsGroupMember(c, "docker", user) {
+		_, ok := AddGroupMember(c, "docker", user)
+		if !ok {
+			log.Printf("error: failed to add user %s to docker group", user.Name)
+			return nil, false
+		}
 	}
 	log.Printf("debug: created new prospect %s", prospectURL)
 	return user, true
@@ -224,6 +226,32 @@ func groupDN(groupName string) string {
 	return fmt.Sprintf("cn=%s,%s", groupName, groupsDN)
 }
 
+// SetProspectPassword : Set the prospect password
+func SetProspectPassword(c *ldap.Conn, prospectURL string) (string, bool) {
+	log.Printf("debug: setting %s password", prospectURL)
+	dn := prospectDN(prospectURL)
+	if err := c.Bind(bindDN, bindPassword); err != nil {
+		log.Printf("error: failed to bind: %s", err)
+		return "", false
+	}
+
+	log.Printf("debug: generating new password")
+	newPassword, err := password.Generate(16, 4, 2, false, false)
+	if err != nil {
+		log.Printf("error: failed to generate user password for %s: %s", prospectURL, err)
+		return "", false
+	}
+	log.Printf("debug: creating password modify requestfor %s", dn)
+	request := ldap.NewPasswordModifyRequest(dn, "", newPassword)
+	log.Printf("trace: executing password modification")
+	if _, err := c.PasswordModify(request); err != nil {
+		log.Printf("error: failed to change user password for %s: %s", prospectURL, err)
+		return "", false
+	}
+	log.Printf("debug: set password for %s", prospectURL)
+	return newPassword, true
+}
+
 // AddGroupMember : Add a User to a group
 func AddGroupMember(c *ldap.Conn, groupName string, user *User) (*Group, bool) {
 	log.Printf("debug: adding %s to group %s", user.Name, groupName)
@@ -234,7 +262,7 @@ func AddGroupMember(c *ldap.Conn, groupName string, user *User) (*Group, bool) {
 	}
 	log.Printf("debug: adding memberUID %s to %s", user.UID, dn)
 	request := ldap.NewModifyRequest(dn, nil)
-	request.Add("memberUid", []string{user.UID})
+	request.Add("memberUid", []string{user.CN})
 	err := c.Modify(request)
 	if err != nil {
 		log.Printf("error: failed to add %s to group %s: %s", user.Name, groupName, err)
@@ -280,6 +308,23 @@ func GetGroup(c *ldap.Conn, groupName string) (*Group, bool) {
 	return nil, false
 }
 
+// IsGroupMember : Checking if a user is a group member
+func IsGroupMember(c *ldap.Conn, groupName string, user *User) bool {
+	log.Printf("debug: checking if %s is a member of %s", user.CN, groupName)
+	g, ok := GetGroup(c, groupName)
+	if !ok {
+		log.Printf("error: no suhc group %s", groupName)
+		return false
+	}
+	for _, member := range g.Members {
+		if member == user.CN || member == user.UID {
+			return true
+		}
+	}
+	log.Printf("info: %s is not a member of %s", user.CN, groupName)
+	return false
+}
+
 // RemoveGroupMember : Remove member from group
 func RemoveGroupMember(c *ldap.Conn, groupName string, user *User) bool {
 	log.Printf("debug: removing %s from %s", user.Name, groupName)
@@ -289,10 +334,10 @@ func RemoveGroupMember(c *ldap.Conn, groupName string, user *User) bool {
 		return false
 	}
 	request := ldap.NewModifyRequest(dn, nil)
-	request.Delete("memberUid", []string{user.UID})
+	request.Delete("memberUid", []string{user.CN})
 	err := c.Modify(request)
 	if err != nil {
-		log.Printf("error: failed to remove %s from %s: %s", user.UID, groupName, err)
+		log.Printf("error: failed to remove %s from %s: %s", user.CN, groupName, err)
 		return false
 	}
 	return true

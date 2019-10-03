@@ -78,7 +78,7 @@ resource "aws_api_gateway_method" "getProspectByURL" {
     authorization = "NONE"
 }
 # GET /p/* => Lambda
-resource "aws_api_gateway_integration" "getProspectIntegration" {
+resource "aws_api_gateway_integration" "getProspect" {
     rest_api_id = "${aws_api_gateway_rest_api.api.id}"
     resource_id = "${aws_api_gateway_resource.prospectResource.id}"
     http_method = "${aws_api_gateway_method.getProspectByURL.http_method}"
@@ -95,41 +95,75 @@ resource "aws_api_gateway_resource" "apiRoot" {
     rest_api_id = "${aws_api_gateway_rest_api.api.id}"
 }
 
+# /api/exams
+resource "aws_api_gateway_resource" "examResources" {
+    path_part = "exams"
+    parent_id = "${aws_api_gateway_resource.apiRoot.id}"
+    rest_api_id = "${aws_api_gateway_rest_api.api.id}"
+}
+
+# /api/exams/{prospectURLID}
+resource "aws_api_gateway_resource" "examResource" {
+    path_part = "{prospectURLID}" # pass anything beyond forward
+    parent_id = "${aws_api_gateway_resource.examResources.id}"
+    rest_api_id = "${aws_api_gateway_rest_api.api.id}"
+}
+
+# PUT /api/exams/{prospectURLID}
+resource "aws_api_gateway_method" "updateExamResource" {
+    rest_api_id = "${aws_api_gateway_rest_api.api.id}"
+    resource_id = "${aws_api_gateway_resource.examResource.id}"
+    http_method = "PUT"
+    authorization = "NONE"
+}
+
+# PUT /api/exams/{prospectURLID} => Lambda
+resource "aws_api_gateway_integration" "updateExamState" {
+    rest_api_id = "${aws_api_gateway_rest_api.api.id}"
+    resource_id = "${aws_api_gateway_resource.examResource.id}"
+    http_method = "${aws_api_gateway_method.updateExamResource.http_method}"
+    integration_http_method = "POST"
+    type = "AWS_PROXY"
+    uri = "arn:aws:apigateway:${var.awsRegion}:lambda:path/2015-03-31/functions/${aws_lambda_function.updateExamState.arn}/invocations"
+    depends_on = ["aws_lambda_function.updateExamState"]
+}
+
 # /api/prospects
 resource "aws_api_gateway_resource" "apiModelProspects" {
     path_part = "prospects"
     parent_id = "${aws_api_gateway_resource.apiRoot.id}"
     rest_api_id = "${aws_api_gateway_rest_api.api.id}"
 }
+
 # POST /api/prospects
-resource "aws_api_gateway_method" "createProspectIntegration" {
+resource "aws_api_gateway_method" "createProspect" {
     rest_api_id = "${aws_api_gateway_rest_api.api.id}"
     resource_id = "${aws_api_gateway_resource.apiModelProspects.id}"
     http_method = "POST"
     authorization = "NONE"
 }
 # GET /api/prospects
-resource "aws_api_gateway_method" "getProspectsIntegration" {
+resource "aws_api_gateway_method" "getProspects" {
     rest_api_id = "${aws_api_gateway_rest_api.api.id}"
     resource_id = "${aws_api_gateway_resource.apiModelProspects.id}"
     http_method = "GET"
     authorization = "NONE"
 }
 # POST /api/prospects => Lambda
-resource "aws_api_gateway_integration" "createProspectIntegration" {
+resource "aws_api_gateway_integration" "createProspect" {
     rest_api_id = "${aws_api_gateway_rest_api.api.id}"
     resource_id = "${aws_api_gateway_resource.apiModelProspects.id}"
-    http_method = "${aws_api_gateway_method.createProspectIntegration.http_method}"
+    http_method = "${aws_api_gateway_method.createProspect.http_method}"
     integration_http_method = "POST"
     type = "AWS_PROXY"
     uri = "arn:aws:apigateway:${var.awsRegion}:lambda:path/2015-03-31/functions/${aws_lambda_function.createProspect.arn}/invocations"
     depends_on = ["aws_lambda_function.createProspect"]
 }
 # GET /api/prospects => Lambda
-resource "aws_api_gateway_integration" "getProspectsIntegration" {
+resource "aws_api_gateway_integration" "getProspects" {
     rest_api_id = "${aws_api_gateway_rest_api.api.id}"
     resource_id = "${aws_api_gateway_resource.apiModelProspects.id}"
-    http_method = "${aws_api_gateway_method.getProspectsIntegration.http_method}"
+    http_method = "${aws_api_gateway_method.getProspects.http_method}"
     integration_http_method = "POST"
     type = "AWS_PROXY"
     uri = "arn:aws:apigateway:${var.awsRegion}:lambda:path/2015-03-31/functions/${aws_lambda_function.getProspects.arn}/invocations"
@@ -143,7 +177,7 @@ resource "aws_api_gateway_resource" "apiModelEmployerLogin" {
     rest_api_id = "${aws_api_gateway_rest_api.api.id}"
 }
 # POST /api/login
-resource "aws_api_gateway_method" "employerLoginIntegration" {
+resource "aws_api_gateway_method" "employerLogin" {
     rest_api_id = "${aws_api_gateway_rest_api.api.id}"
     resource_id = "${aws_api_gateway_resource.apiModelEmployerLogin.id}"
     http_method = "POST"
@@ -151,10 +185,10 @@ resource "aws_api_gateway_method" "employerLoginIntegration" {
 }
 
 # POST /api/login => Lambda
-resource "aws_api_gateway_integration" "employerLoginIntegration" {
+resource "aws_api_gateway_integration" "employerLogin" {
     rest_api_id = "${aws_api_gateway_rest_api.api.id}"
     resource_id = "${aws_api_gateway_resource.apiModelEmployerLogin.id}"
-    http_method = "${aws_api_gateway_method.employerLoginIntegration.http_method}"
+    http_method = "${aws_api_gateway_method.employerLogin.http_method}"
     integration_http_method = "POST"
     type = "AWS_PROXY"
     uri = "arn:aws:apigateway:${var.awsRegion}:lambda:path/2015-03-31/functions/${aws_lambda_function.employerLogin.arn}/invocations"
@@ -166,17 +200,17 @@ resource "aws_api_gateway_integration" "employerLoginIntegration" {
 ##
 
 # OPTIONS /api/prospects
-resource "aws_api_gateway_method" "optionsProspects" {
+resource "aws_api_gateway_method" "CORSOptionsProspects" {
     rest_api_id = "${aws_api_gateway_rest_api.api.id}"
     resource_id = "${aws_api_gateway_resource.apiModelProspects.id}"
     http_method = "OPTIONS"
     authorization = "NONE"
 }
 # CORS /api/prospects - enable headers
-resource "aws_api_gateway_method_response" "optionsProspects" {
+resource "aws_api_gateway_method_response" "CORSOptionsProspects" {
     rest_api_id = "${aws_api_gateway_rest_api.api.id}"
     resource_id = "${aws_api_gateway_resource.apiModelProspects.id}"
-    http_method = "${aws_api_gateway_method.optionsProspects.http_method}"
+    http_method = "${aws_api_gateway_method.CORSOptionsProspects.http_method}"
     status_code = "200"
     response_models = {
       "application/json" = "Empty"
@@ -186,42 +220,42 @@ resource "aws_api_gateway_method_response" "optionsProspects" {
       "method.response.header.Access-Control-Allow-Methods" = true
       "method.response.header.Access-Control-Allow-Origin" = true
     }
-    depends_on = ["aws_api_gateway_method.optionsProspects"]
+    depends_on = ["aws_api_gateway_method.CORSOptionsProspects"]
 }
 # CORS /api/prospects - handle request
-resource "aws_api_gateway_integration" "optionsProspects" {
+resource "aws_api_gateway_integration" "CORSOptionsProspects" {
     rest_api_id = "${aws_api_gateway_rest_api.api.id}"
     resource_id = "${aws_api_gateway_resource.apiModelProspects.id}"
-    http_method = "${aws_api_gateway_method.optionsProspects.http_method}"
+    http_method = "${aws_api_gateway_method.CORSOptionsProspects.http_method}"
     type = "MOCK"
-    depends_on = ["aws_api_gateway_method.optionsProspects"]
+    depends_on = ["aws_api_gateway_method.CORSOptionsProspects"]
 }
 # CORS /api/prospects - set response headers
-resource "aws_api_gateway_integration_response" "optionsProspects" {
+resource "aws_api_gateway_integration_response" "CORSOptionsProspects" {
     rest_api_id = "${aws_api_gateway_rest_api.api.id}"
     resource_id = "${aws_api_gateway_resource.apiModelProspects.id}"
-    http_method = "${aws_api_gateway_method.optionsProspects.http_method}"
-    status_code = "${aws_api_gateway_method_response.optionsProspects.status_code}"
+    http_method = "${aws_api_gateway_method.CORSOptionsProspects.http_method}"
+    status_code = "${aws_api_gateway_method_response.CORSOptionsProspects.status_code}"
     response_parameters = {
       "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,X-Amz-Data,Authorization,X-Api-Key,X-Amz-Security-Token'"
       "method.response.header.Access-Control-Allow-Methods" = "'GET,OPTIONS,POST,PUT'"
       "method.response.header.Access-Control-Allow-Origin" = "'*'"
     }
-    depends_on = ["aws_api_gateway_method_response.optionsProspects"]
+    depends_on = ["aws_api_gateway_method_response.CORSOptionsProspects"]
 }
 
 # OPTIONS /api/login
-resource "aws_api_gateway_method" "optionsEmployerLogin" {
+resource "aws_api_gateway_method" "CORSEmployerLogin" {
     rest_api_id = "${aws_api_gateway_rest_api.api.id}"
     resource_id = "${aws_api_gateway_resource.apiModelEmployerLogin.id}"
     http_method = "OPTIONS"
     authorization = "NONE"
 }
 # CORS /api/login - enable headers
-resource "aws_api_gateway_method_response" "optionsEmployerLogin" {
+resource "aws_api_gateway_method_response" "CORSEmployerLogin" {
     rest_api_id = "${aws_api_gateway_rest_api.api.id}"
     resource_id = "${aws_api_gateway_resource.apiModelEmployerLogin.id}"
-    http_method = "${aws_api_gateway_method.optionsEmployerLogin.http_method}"
+    http_method = "${aws_api_gateway_method.CORSEmployerLogin.http_method}"
     status_code = "200"
     response_models = {
       "application/json" = "Empty"
@@ -231,28 +265,118 @@ resource "aws_api_gateway_method_response" "optionsEmployerLogin" {
       "method.response.header.Access-Control-Allow-Methods" = true
       "method.response.header.Access-Control-Allow-Origin" = true
     }
-    depends_on = ["aws_api_gateway_method.optionsEmployerLogin"]
+    depends_on = ["aws_api_gateway_method.CORSEmployerLogin"]
 }
 # CORS /api/login - handle request
-resource "aws_api_gateway_integration" "optionsEmployerLogin" {
+resource "aws_api_gateway_integration" "CORSEmployerLogin" {
     rest_api_id = "${aws_api_gateway_rest_api.api.id}"
     resource_id = "${aws_api_gateway_resource.apiModelEmployerLogin.id}"
-    http_method = "${aws_api_gateway_method.optionsEmployerLogin.http_method}"
+    http_method = "${aws_api_gateway_method.CORSEmployerLogin.http_method}"
     type = "MOCK"
-    depends_on = ["aws_api_gateway_method.optionsEmployerLogin"]
+    depends_on = ["aws_api_gateway_method.CORSEmployerLogin"]
 }
 # CORS /api/login - set response headers
-resource "aws_api_gateway_integration_response" "optionsEmployerLogin" {
+resource "aws_api_gateway_integration_response" "CORSEmployerLogin" {
     rest_api_id = "${aws_api_gateway_rest_api.api.id}"
     resource_id = "${aws_api_gateway_resource.apiModelEmployerLogin.id}"
-    http_method = "${aws_api_gateway_method.optionsEmployerLogin.http_method}"
-    status_code = "${aws_api_gateway_method_response.optionsEmployerLogin.status_code}"
+    http_method = "${aws_api_gateway_method.CORSEmployerLogin.http_method}"
+    status_code = "${aws_api_gateway_method_response.CORSEmployerLogin.status_code}"
     response_parameters = {
       "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,X-Amz-Data,Authorization,X-Api-Key,X-Amz-Security-Token'"
       "method.response.header.Access-Control-Allow-Methods" = "'GET,OPTIONS,POST,PUT'"
       "method.response.header.Access-Control-Allow-Origin" = "'*'"
     }
-    depends_on = ["aws_api_gateway_method_response.optionsEmployerLogin"]
+    depends_on = ["aws_api_gateway_method_response.CORSEmployerLogin"]
+}
+
+# OPTIONS /api/exams
+resource "aws_api_gateway_method" "CORSOptionsExams" {
+    rest_api_id = "${aws_api_gateway_rest_api.api.id}"
+    resource_id = "${aws_api_gateway_resource.examResources.id}"
+    http_method = "OPTIONS"
+    authorization = "NONE"
+}
+# CORS /api/exams - enable headers
+resource "aws_api_gateway_method_response" "CORSOptionsExams" {
+    rest_api_id = "${aws_api_gateway_rest_api.api.id}"
+    resource_id = "${aws_api_gateway_resource.examResources.id}"
+    http_method = "${aws_api_gateway_method.CORSOptionsExams.http_method}"
+    status_code = "200"
+    response_models = {
+      "application/json" = "Empty"
+    }
+    response_parameters = {
+      "method.response.header.Access-Control-Allow-Headers" = true
+      "method.response.header.Access-Control-Allow-Methods" = true
+      "method.response.header.Access-Control-Allow-Origin" = true
+    }
+    depends_on = ["aws_api_gateway_method.CORSOptionsExams"]
+}
+# CORS /api/exams - handle request
+resource "aws_api_gateway_integration" "CORSOptionsExams" {
+    rest_api_id = "${aws_api_gateway_rest_api.api.id}"
+    resource_id = "${aws_api_gateway_resource.examResources.id}"
+    http_method = "${aws_api_gateway_method.CORSOptionsExams.http_method}"
+    type = "MOCK"
+    depends_on = ["aws_api_gateway_method.CORSOptionsExams"]
+}
+# CORS /api/exams - set response headers
+resource "aws_api_gateway_integration_response" "CORSOptionsExams" {
+    rest_api_id = "${aws_api_gateway_rest_api.api.id}"
+    resource_id = "${aws_api_gateway_resource.examResources.id}"
+    http_method = "${aws_api_gateway_method.CORSOptionsExams.http_method}"
+    status_code = "${aws_api_gateway_method_response.CORSOptionsExams.status_code}"
+    response_parameters = {
+      "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,X-Amz-Data,Authorization,X-Api-Key,X-Amz-Security-Token'"
+      "method.response.header.Access-Control-Allow-Methods" = "'GET,OPTIONS,POST,PUT'"
+      "method.response.header.Access-Control-Allow-Origin" = "'*'"
+    }
+    depends_on = ["aws_api_gateway_method_response.CORSOptionsExams"]
+}
+
+# OPTIONS /api/exams/{prospectURLID}
+resource "aws_api_gateway_method" "CORSOptionsExam" {
+    rest_api_id = "${aws_api_gateway_rest_api.api.id}"
+    resource_id = "${aws_api_gateway_resource.examResource.id}"
+    http_method = "OPTIONS"
+    authorization = "NONE"
+}
+# CORS /api/exams/{prospectURLID} - enable headers
+resource "aws_api_gateway_method_response" "CORSOptionsExam" {
+    rest_api_id = "${aws_api_gateway_rest_api.api.id}"
+    resource_id = "${aws_api_gateway_resource.examResource.id}"
+    http_method = "${aws_api_gateway_method.CORSOptionsExam.http_method}"
+    status_code = "200"
+    response_models = {
+      "application/json" = "Empty"
+    }
+    response_parameters = {
+      "method.response.header.Access-Control-Allow-Headers" = true
+      "method.response.header.Access-Control-Allow-Methods" = true
+      "method.response.header.Access-Control-Allow-Origin" = true
+    }
+    depends_on = ["aws_api_gateway_method.CORSOptionsExam"]
+}
+# CORS /api/exams/{prospectURLID} - handle request
+resource "aws_api_gateway_integration" "CORSOptionsExam" {
+    rest_api_id = "${aws_api_gateway_rest_api.api.id}"
+    resource_id = "${aws_api_gateway_resource.examResource.id}"
+    http_method = "${aws_api_gateway_method.CORSOptionsExam.http_method}"
+    type = "MOCK"
+    depends_on = ["aws_api_gateway_method.CORSOptionsExam"]
+}
+# CORS /api/exams/{prospectURLID} - set response headers
+resource "aws_api_gateway_integration_response" "CORSOptionsExam" {
+    rest_api_id = "${aws_api_gateway_rest_api.api.id}"
+    resource_id = "${aws_api_gateway_resource.examResource.id}"
+    http_method = "${aws_api_gateway_method.CORSOptionsExam.http_method}"
+    status_code = "${aws_api_gateway_method_response.CORSOptionsExam.status_code}"
+    response_parameters = {
+      "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,X-Amz-Data,Authorization,X-Api-Key,X-Amz-Security-Token'"
+      "method.response.header.Access-Control-Allow-Methods" = "'GET,OPTIONS,POST,PUT'"
+      "method.response.header.Access-Control-Allow-Origin" = "'*'"
+    }
+    depends_on = ["aws_api_gateway_method_response.CORSOptionsExam"]
 }
 
 # Create API Gateway stage
@@ -266,12 +390,13 @@ resource "aws_api_gateway_integration_response" "optionsEmployerLogin" {
 # Deploy API to {{ vetzuki_environment }} stage
 resource "aws_api_gateway_deployment" "api" {
   depends_on = [
-    "aws_api_gateway_integration.getProspectIntegration",
-    "aws_api_gateway_integration.getProspectsIntegration",
-    "aws_api_gateway_integration.createProspectIntegration",
-    "aws_api_gateway_integration.employerLoginIntegration",
-    "aws_api_gateway_integration.optionsEmployerLogin",
-    "aws_api_gateway_integration.optionsProspects",
+    "aws_api_gateway_integration.getProspect",
+    "aws_api_gateway_integration.getProspects",
+    "aws_api_gateway_integration.createProspect",
+    "aws_api_gateway_integration.employerLogin",
+    "aws_api_gateway_integration.updateExamState",
+    "aws_api_gateway_integration.CORSEmployerLogin",
+    "aws_api_gateway_integration.CORSOptionsProspects",
     "aws_api_gateway_rest_api.api" # To ensure the policy is in place
   ]
   rest_api_id = "${aws_api_gateway_rest_api.api.id}"

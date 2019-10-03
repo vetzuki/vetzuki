@@ -46,8 +46,26 @@ func TestFindUser(t *testing.T) {
 		t.Fatalf("Expected prospect name to be %s, got %s", seeds.Users[0].Name, prospect.Name)
 	}
 }
+func TestSetProspectPassword(t *testing.T) {
+	ldapConnection, err := ldap.Dial("tcp", "localhost:389")
+	if err != nil {
+		t.Fatalf("failed to connect to ldap server at localhost: %s", err)
+	}
+	_ = DeleteProspect(ldapConnection, "id1")
+	prospect, ok := CreateProspect(ldapConnection, "id1")
+	if !ok {
+		t.Fatalf("failed to create prospect")
+	}
+	p, ok := SetProspectPassword(ldapConnection, prospect.CN)
+	if !ok {
+		t.Fatalf("expected password, got none")
+	}
+	if len(p) == 0 {
+		t.Fatalf("expected a password length > 0, got 0")
+	}
 
-func TestCreateUser(t *testing.T) {
+}
+func TestCreateProspect(t *testing.T) {
 	ldapConnection, err := ldap.Dial("tcp", "localhost:389")
 	if err != nil {
 		t.Fatalf("failed to connect to ldap server at localhost: %s", err)
@@ -74,22 +92,22 @@ func TestAddGroupMember(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to connect to ldap server at localhost: %s", err)
 	}
-	uid := "10000"
 	groupName := "docker"
-	defer RemoveGroupMember(ldapConnection, groupName, &User{UID: uid})
-	dockerGroup, ok := AddGroupMember(ldapConnection, groupName, &User{UID: uid})
+	cn := "cn"
+	defer RemoveGroupMember(ldapConnection, groupName, &User{CN: cn})
+	dockerGroup, ok := AddGroupMember(ldapConnection, groupName, &User{CN: cn})
 	if !ok {
-		t.Fatalf("expected to add %s to %s, but failed", uid, groupName)
+		t.Fatalf("expected to add %s to %s, but failed", cn, groupName)
 	}
 	found := false
 	for _, member := range dockerGroup.Members {
-		found = member == uid
+		found = member == cn
 		if found {
 			break
 		}
 	}
 	if !found {
-		t.Fatalf("expected to find %s, but failed", uid)
+		t.Fatalf("expected to find %s, but failed", cn)
 	}
 
 }

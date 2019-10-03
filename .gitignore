@@ -18,3 +18,5 @@ handler
 lambda.zip
 
 **/.vscode
+
+src/*.tf

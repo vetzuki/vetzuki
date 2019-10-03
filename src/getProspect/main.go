@@ -16,6 +16,7 @@ import (
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 	// "github.com/aws/aws-sdk-go/service/s3"
+	lambdaEvents "github.com/vetzuki/vetzuki/events"
 	"github.com/vetzuki/vetzuki/model"
 	"html/template"
 	"log"
@@ -104,7 +105,10 @@ const pageTemplate = `
 Connect to the server below to complete
 your application for {{ .Role }} at {{ .Employer }}
 </div>
-<div id="prospect-ssh-url">{{ .SSHURL }}</div>
+<div id="prospect-ssh-url">ssh {{ .SSHURL }}</div>
+<div id="prospect-instructions">
+  And your password is: <strong>{{ .Password }}</strong>
+</div>
 <div id="footer">{{ .Footer }}</div>
 </body>
 </html>`
@@ -131,6 +135,7 @@ type Link struct {
 type Page struct {
 	Title, Name, Role, Employer string
 	SSHURL                      string
+	Password                    string
 	Footer                      string
 	Links                       []Link
 }
@@ -142,13 +147,14 @@ func getTemplate() *template.Template {
 	return t
 }
 
-func buildPage(r Redemption, prospect *model.Prospect) (*Page, error) {
+func buildPage(r Redemption, prospect *model.Prospect, password string) (*Page, error) {
 	page := &Page{
 		Title:    "VetZuki",
 		Name:     prospect.Name,
 		Role:     prospect.Role,
 		Employer: prospect.EmployerName,
 		SSHURL:   fmt.Sprintf("%s@%s", prospect.URL, sshURL),
+		Password: password,
 		Footer:   "Copyright VetZuki 2019. All rights reserved.",
 	}
 	return page, nil
@@ -173,26 +179,26 @@ func Handle(ctx context.Context, request events.APIGatewayProxyRequest) (events.
 	prospect, ok := model.GetProspect(r.ProspectURLID)
 	if !ok {
 		log.Printf("error: failed to find prospect %s", r.ProspectURLID)
-		return events.APIGatewayProxyResponse{
-			StatusCode: 404,
-			Body:       "not found",
-		}, fmt.Errorf("404: No such URL")
+		return lambdaEvents.NotFound, fmt.Errorf("404: no such URL")
 	}
-	page, err := buildPage(r, prospect)
+	if !prospect.SetScreeningState(model.ScreeningStateConfirmed) {
+		log.Printf("error: failed to set screening state to confirmed for %s", prospect.URL)
+		return lambdaEvents.ServerError, fmt.Errorf("500: server error")
+	}
+	password, ok := prospect.SetPassword()
+	if !ok {
+		log.Printf("error: failed to reset prospect password %s", prospect.URL)
+		return lambdaEvents.ServerError, fmt.Errorf("error: failed to reset password")
+	}
+	page, err := buildPage(r, prospect, password)
 	if err != nil {
 		log.Printf("error: while building page: %s", err)
-		return events.APIGatewayProxyResponse{
-			StatusCode: 500,
-			Body:       "error loading page",
-		}, fmt.Errorf("500: Error rendering")
+		return lambdaEvents.ServerError, fmt.Errorf("500: error rendering")
 	}
 	content, err := render(t, page)
 	if err != nil {
 		log.Printf("error: while rendering page: %s", err)
-		return events.APIGatewayProxyResponse{
-			StatusCode: 500,
-			Body:       "error loading page",
-		}, fmt.Errorf("500: Error rendering")
+		return lambdaEvents.ServerError, fmt.Errorf("500: Error rendering")
 	}
 	return events.APIGatewayProxyResponse{
 		StatusCode:      200,
