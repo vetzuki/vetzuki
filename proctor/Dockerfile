@@ -1,8 +1,8 @@
 # Exam image
 FROM ubuntu:latest
-
-RUN apt update && apt dist-upgrade -y && apt install -y openssh-server iproute2 net-tools curl bash iputils-ping
-
+RUN apt update -o "Acquire::Check-Date=no" && \
+    apt dist-upgrade -y -o "Acquire::Check-Date=no" && \
+    apt install -y openssh-server iproute2 net-tools curl bash iputils-ping
 
 RUN mkdir /app
 ADD ping_monitor /app

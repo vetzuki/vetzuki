@@ -47,19 +47,19 @@ if [ $examResult == "timeExceeded" ] ; then
     ssh -i $proctorIdentity \
     -o "StrictHostKeyChecking=no" \
 	root@$PROSPECT_IP \
-	wall "Exam time limit exceeded. See $VETZUKI_UI/$PROSPECT_ID for next steps."
+	wall -n "Exam time limit exceeded. See $VETZUKI_UI/$PROSPECT_ID for next steps."
 fi
 
 if [ $examResult == "finish" ] ; then
     ssh -i $proctorIdentity \
     -o "StrictHostKeyChecking=no" \
 	root@$PROSPECT_IP \
-	wall "Exam complete. See $VETZUKI_UI/$PROSPECT_ID for next steps."
+	wall -n "Exam complete. See $VETZUKI_UI/$PROSPECT_ID for next steps."
 fi
 sleep 5
 ssh -i $proctorIdentity \
     -o "StrictHostKeyChecking=no" \
-    root@$PROSPECT_IP wall "Test will now exit..."
+    root@$PROSPECT_IP wall -n "Test will now exit..."
 ssh -i $proctorIdentity \
     -o "StrictHostKeyChecking=no" \
     root@$PROSPECT_IP kill 1

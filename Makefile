@@ -1,4 +1,4 @@
-PROJECT_ROOT = $(HOME)/Development/vetZuki
+PROJECT_ROOT = $(HOME)/development/vetZuki
 
 ANSIBLE_POC_INVENTORY = inventory
 ANSIBLE_PLAYBOOKCMD = ansible-playbook
@@ -8,8 +8,8 @@ TFSTATE_QUERYCMD = ./tfstate_query.py
 
 EXAM_ECR = 588487667149.dkr.ecr.us-west-2.amazonaws.com/vetzuki-exam
 PROCTOR_ECR = 588487667149.dkr.ecr.us-west-2.amazonaws.com/vetzuki-proctor
-EXAM_CONTAINER_RELEASE = 0
-PROCTOR_CONTAINER_RELEASE = 0
+EXAM_CONTAINER_RELEASE = 0.1
+PROCTOR_CONTAINER_RELEASE = 0.1
 
 init:
 	$(TERRAFORMCMD) init
@@ -20,7 +20,7 @@ createPOCInventory:
 	$(file >>poc_inventory,[poc])
 	$(file >>poc_inventory,poc_exam_host ansible_host=${IP} ansible_user=ec2-user)
 
-buildPOC: createPOCInventory provisionPOC conifgurePOC
+buildPOC: createPOCInventory provisionPOC configurePOC
 
 provisionPOC:
 	$(TERRAFORMCMD) apply
@@ -33,7 +33,6 @@ configurePOC:
 buildAll: examContainer proctorContainer
 
 examContainer: 
-	cd $(PROJECT_ROOT)/exam
 	docker build -t $(EXAM_ECR):$(EXAM_CONTAINER_RELEASE) $(PROJECT_ROOT)/exam/
 
 proctorContainer:
@@ -41,10 +40,10 @@ proctorContainer:
 
 pushAll: pushExamContainer pushProctorContainer
 
-pushExamContainer: ecrLogin examContainer
+pushExamContainer: examContainer
 	docker push $(EXAM_ECR):$(EXAM_CONTAINER_RELEASE)
 
-pushProctorContainer: ecrLogin proctorContainer
+pushProctorContainer: proctorContainer
 	docker push $(PROCTOR_ECR):$(PROCTOR_CONTAINER_RELEASE)
 
 ecrLogin:
@@ -53,10 +52,10 @@ ecrLogin:
 # Testing features
 run: runExamContainer 
 runExamContainer:
-	docker run -d --name exam vetzuki.com/exam:0
+	docker run -d --name exam vetzuki.com/exam:$(EXAM_CONTAINER_RELEASE)
 
 runProctorContainer:
-	docker run -d --name proctor vetzuki.com/proctor:0
+	docker run -d --name proctor vetzuki.com/proctor:$(PROCTOR_CONTAINER_RELEASE)
 
 clean: docker-kill docker-rm
 
