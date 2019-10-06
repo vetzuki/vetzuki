@@ -114,6 +114,111 @@ func (p *Prospect) SetPassword() (string, bool) {
 	return ldap.SetProspectPassword(c, p.URL)
 }
 
+// SaveScore : Save the prospoect score
+func (p *Prospect) SaveScore(score *ProspectScore) bool {
+	log.Printf("debug: creating score entry for %s", p.URL)
+	err := connection.QueryRow(`
+	INSERT INTO prospect_score
+	(prospect_id, score, solved, difficulty, time_taken_ms, total_time_ms, pct_time_taken, command_count, start_time, end_time)
+	VALUES
+	($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+	RETURNING id, created, modified
+	`,
+		p.ID,
+		score.Score,
+		score.Solved,
+		score.Difficulty,
+		score.TimeTakenMS,
+		score.TotalTimeMS,
+		score.PctTimeTaken,
+		score.CommandCount,
+		score.StartTime,
+		score.EndTime,
+	).Scan(&score.ID, &score.Created, &score.Modified)
+	if err != nil {
+		log.Printf("error: failed to create score for %s: %s", p.URL, err)
+		return false
+	}
+	return true
+}
+
+// GetScore : Get the score for a prospect
+func (p *Prospect) GetScore() (*ProspectScore, bool) {
+	log.Printf("debug: getting score for %s", p.URL)
+	var score ProspectScore
+	err := connection.QueryRow(`
+	SELECT
+	id, prospect_id, score, solved, difficulty, time_taken_ms, total_time_ms, pct_time_taken, command_count, start_time, end_time, created, modified
+	FROM prospect_score
+	WHERE prospect_id = $1`, p.ID,
+	).Scan(
+		&score.ID,
+		&p.ID,
+		&score.Score,
+		&score.Solved,
+		&score.Difficulty,
+		&score.TimeTakenMS,
+		&score.TotalTimeMS,
+		&score.PctTimeTaken,
+		&score.CommandCount,
+		&score.StartTime,
+		&score.EndTime,
+		&score.Created,
+		&score.Modified,
+	)
+	if err != nil {
+		log.Printf("error: failed to find score for %s: %s", p.URL, err)
+		return nil, false
+	}
+	return &score, true
+}
+
+// SaveExamLog : Save the exam log for a prospect
+func (p *Prospect) SaveExamLog(l string) (*ExamLog, bool) {
+	log.Printf("debug: saving exam log for %s", p.URL)
+	var examLog ExamLog
+	err := connection.QueryRow(`
+	INSERT INTO exam_log
+	(prospect_id, log)
+	VALUES ($1, $2)
+	RETURNING created, modified`,
+		p.ID, l,
+	).Scan(
+		&examLog.Created,
+		&examLog.Modified,
+	)
+	if err != nil {
+		log.Printf("error: failed to save exam log for %s: %s", p.URL, err)
+		return nil, false
+	}
+	examLog.Log = l
+	examLog.ProspectID = p.ID
+	return &examLog, true
+}
+
+// SaveVetzukiLog : Save the vetzuki log for a prospect
+func (p *Prospect) SaveVetzukiLog(l string) (*VetzukiLog, bool) {
+	log.Printf("debug: saving vetzuki log for %s", p.URL)
+	var vetzukiLog VetzukiLog
+	err := connection.QueryRow(`
+	INSERT INTO vetzuki_log
+	(prospect_id, log)
+	VALUES ($1, $2)
+	RETURNING created, modified`,
+		p.ID, l,
+	).Scan(
+		&vetzukiLog.Created,
+		&vetzukiLog.Modified,
+	)
+	if err != nil {
+		log.Printf("error: failed to save vetzuki log for %s: %s", p.URL, err)
+		return nil, false
+	}
+	vetzukiLog.Log = l
+	vetzukiLog.ProspectID = p.ID
+	return &vetzukiLog, true
+}
+
 // GetEmployer : Get an employer by ID
 func GetEmployer(id int64) (*Employer, bool) {
 	return findEmployerByID(id)
@@ -378,6 +483,39 @@ func findEmployer(email string) (*Employer, bool) {
 	}
 
 	return employer, true
+}
+
+// ExamLog : Actual log of an exam
+type ExamLog struct {
+	ProspectID int64     `sql:"prospect_id" json:"prospectID"`
+	Log        string    `sql:"log" json:"log"` // base64 encoded
+	Created    time.Time `sql:"created" json:"created"`
+	Modified   time.Time `sql:"modified" json:"modified"`
+}
+
+// VetzukiLog : Log of exam setup and teardown
+type VetzukiLog struct {
+	ProspectID int64     `sql:"prospect_id" json:"prospectID"`
+	Log        string    `sql:"log" json:"log"` // base64 encoded
+	Created    time.Time `sql:"created" json:"created"`
+	Modified   time.Time `sql:"modified" json:"modified"`
+}
+
+// ProspectScore : Result of a scoring
+type ProspectScore struct {
+	ID            int64     `sql:"id" json:"id"`
+	ProspectURLID string    `json:"prospectURLID"`
+	Score         float64   `sql:"score" json:"score"`
+	Solved        float64   `sql:"solved" json:"solved"`
+	TimeTakenMS   float64   `sql:"time_taken_ms" json:"timeTakenMS"`
+	TotalTimeMS   float64   `sql:"total_time_ms" json:"totalTimeMS"`
+	PctTimeTaken  float64   `sql:"pct_time_taken" json:"pctTimeTaken"`
+	CommandCount  float64   `sql:"total_command_count" json:"totalCommandCount"`
+	Difficulty    float64   `sql:"difficulty" json:"difficulty"`
+	StartTime     time.Time `sql:"start_time" json:"startTime"`
+	EndTime       time.Time `sql:"end_time" json:"endTime"`
+	Created       time.Time `sql:"created" json:"created"`
+	Modified      time.Time `sql:"modified" json:"modified"`
 }
 
 // Employer : An employer can hire prospects

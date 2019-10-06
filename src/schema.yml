@@ -1,0 +1,13 @@
+# Must be run from the same VPC as RDS
+- hosts: localhost
+  tasks:
+    - include_role:
+        name: schema
+      vars:
+        vetzuki_environment: development
+- hosts: poc_exam_host
+  tasks:
+    - include_role:
+        name: schema
+      vars:
+        vetzuki_environment: poc

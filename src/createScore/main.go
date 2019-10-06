@@ -4,16 +4,16 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/vetzuki/vetzuki/auth"
 	lambdaEvents "github.com/vetzuki/vetzuki/events"
+	"github.com/vetzuki/vetzuki/model"
+	"log"
 	"regexp"
 	"strings"
 	"time"
-	// "github.com/vetzuki/vetzuki/model"
-	"fmt"
-	"log"
 )
 
 const (
@@ -36,19 +36,6 @@ type ScoringRequest struct {
 	VetzukiLogBase64 string `json:"vetzukiLog"`
 }
 
-// ProspectScore : Result of a scoring
-type ProspectScore struct {
-	ProspectURLID     string  `json:"prospectURLID"`
-	Score             float64 `json:"score"`
-	Solved            float64 `json:"solved"`
-	TimeTakenMS       float64 `json:"timeTakenMS"`
-	TotalTimeMS       float64 `json:"totalTimeMS"`
-	PctTimeTaken      float64 `json:"pctTimeTaken"`
-	TotalCommandCount float64 `json:"totalCommandCount"`
-	Difficulty        float64 `json:"difficulty"`
-	*Exam             `json:"exam"`
-}
-
 // Exam : Structure of exam
 type Exam struct {
 	Assignment      []string  `json:"assignment"`
@@ -59,11 +46,16 @@ type Exam struct {
 }
 
 // ScoreProspect : Score the prospect based on their performance
-func ScoreProspect(s ScoringRequest) (*ProspectScore, bool) {
+func ScoreProspect(s ScoringRequest) (*model.ProspectScore, bool) {
 	log.Printf("debug: scoring exam for %s", s.ProspectURLID)
 	rawLog, err := base64.StdEncoding.DecodeString(s.ExamLogBase64)
 	if err != nil {
 		log.Printf("error: unable to decode exam log: %s", err)
+		return nil, false
+	}
+	prospect, ok := model.GetProspect(s.ProspectURLID)
+	if !ok {
+		log.Printf("error: unable to locate prospect %s", s.ProspectURLID)
 		return nil, false
 	}
 	// When processing the exam log, watch out for empty command lines
@@ -94,21 +86,29 @@ func ScoreProspect(s ScoringRequest) (*ProspectScore, bool) {
 
 	score := solved - (pctTimeTaken * ((float64(1) / totalCommands) / examDifficulty))
 	log.Printf("debug: %s scored %3f", s.ProspectURLID, score)
-	prospectScore := &ProspectScore{
-		ProspectURLID:     s.ProspectURLID,
-		Score:             score,
-		Solved:            solved,
-		Difficulty:        examDifficulty,
-		TimeTakenMS:       float64(timeTaken.Milliseconds()),
-		TotalTimeMS:       float64(examDuration.Milliseconds()),
-		PctTimeTaken:      pctTimeTaken,
-		TotalCommandCount: totalCommands,
-		Exam: &Exam{
-			// Assignment: assignment,
-			// Log:        examLog,
-			StartTime: startTime,
-			EndTime:   endTime,
-		},
+	prospectScore := &model.ProspectScore{
+		ProspectURLID: s.ProspectURLID,
+		Score:         score,
+		Solved:        solved,
+		Difficulty:    examDifficulty,
+		TimeTakenMS:   float64(timeTaken.Milliseconds()),
+		TotalTimeMS:   float64(examDuration.Milliseconds()),
+		PctTimeTaken:  pctTimeTaken,
+		CommandCount:  totalCommands,
+		StartTime:     startTime,
+		EndTime:       endTime,
+	}
+	_, ok = prospect.SaveExamLog(s.ExamLogBase64)
+	if !ok {
+		log.Printf("warning: failed to save exam log for %s", s.ProspectURLID)
+	}
+	_, ok = prospect.SaveVetzukiLog(s.VetzukiLogBase64)
+	if !ok {
+		log.Printf("warning: failed to save vetzuki log for %s", s.ProspectURLID)
+	}
+	if !prospect.SaveScore(prospectScore) {
+		log.Printf("error: failed to save score for prospect %s", s.ProspectURLID)
+		return nil, false
 	}
 	return prospectScore, true
 }

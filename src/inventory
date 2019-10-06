@@ -1,0 +1,2 @@
+[poc]
+poc_exam_host ansible_host=ldap.poc.vetzuki.com ansible_user=ec2-user
