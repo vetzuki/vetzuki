@@ -12,10 +12,12 @@ import (
 
 const (
 	envAdminWhitelist = "ADMIN_WHITELIST"
+	envTeeshAPIKEY    = "TEESH_API_KEY"
 )
 
 var (
 	adminWhitelist = []string{}
+	teeshAPIKey    = ""
 )
 
 // JWTClaims : Claims in JWT
@@ -38,6 +40,9 @@ func init() {
 		}
 		log.Printf("info: whitelisted %d admins", len(adminWhitelist))
 	}
+
+	teeshAPIKey = os.Getenv(envTeeshAPIKEY)
+
 }
 func checkAdminWhitelist(jwtClaims JWTClaims) bool {
 	if len(adminWhitelist) == 0 {
@@ -50,6 +55,15 @@ func checkAdminWhitelist(jwtClaims JWTClaims) bool {
 	}
 	log.Printf("warning: %s is not authorized by whitelist", jwtClaims.Email)
 	return false
+}
+
+// ValidateAPIKey : Validate an API key
+func ValidateAPIKey(apiKey string) bool {
+	if len(apiKey) == 0 || len(teeshAPIKey) == 0 {
+		log.Printf("error: apiKey is %d in size, teesh key is %d. Cannot be like this", len(apiKey), len(teeshAPIKey))
+		return false
+	}
+	return strings.TrimSpace(apiKey) == strings.TrimSpace(teeshAPIKey)
 }
 
 // ValidateToken : Validate an auth0 opaque access

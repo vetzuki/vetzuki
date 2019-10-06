@@ -16,6 +16,7 @@
 APP_ROOT=/vetZuki
 API_KEY={{ teesh.api_key }}
 API_URL=https://www.{{ vetzuki_environment }}.vetzuki.com/api/exams/$USER
+SCORING_URL=https://www.{{ vetzuki_environment }}.vetzuki.com/api/scores
 ACTIVE={{ teesh.state.active }}
 COMPLETED={{ teesh.state.completed }}
 
@@ -24,8 +25,8 @@ prospectID=$USER
 configRoot=$APP_ROOT/$prospectID
 vetzukiLog=$configRoot/vetzuki.log
 examLog=$configRoot/exam.log
-examImage=588487667149.dkr.ecr.us-west-2.amazonaws.com/vetzuki-exam:0
-proctorImage=588487667149.dkr.ecr.us-west-2.amazonaws.com/vetzuki-proctor:0
+examImage={{ exam.image }}:{{ exam.version }}
+proctorImage={{ proctor.image }}:{{ proctor.version }}
 combinedPublicKeys=authorized_keys
 vetzukiAPI=https://www.{{ vetzuki_environment }}.vetzuki.com/api
 vetzukiUI=https://www.{{ vetzuki_environment }}.vetzuki.com/
@@ -81,6 +82,7 @@ cd $configRoot >> $vetzukiLog 2>&1
 
 # Create the POC assigment
 echo "Assign the IP $assignmentIP to the eth0 interface" > assignment
+echo "---" >> assignment
 # Create prospect key pair
 ssh-keygen -b 2048 -t rsa -f $prospectPrivateKey -q -N "" >> $vetzukiLog 2>&1
 # Create proctor key pair
@@ -158,10 +160,25 @@ ssh \
     -p $examContainerSSHPort \
     -i $prospectPrivateKey \
     root@127.0.0.1 \
-    | tee >(ts "%d-%m-%y %H_%M_%S" > $logFile)
+    | tee >(ts "%Y-%m-%d %H:%M:%.S" > $logFile)
+
 # Set screening state as completed
 echo "Marking $USER screening state as Completed at $API_URL" >> $vetzukiLog 2>&1
-curl -X PUT -H "Authorization: $API_KEY" "$API_URL" -d "{\"screeningState\": $COMPLETED}" >> $vetzukiLog 2>&1
+curl -X PUT \
+  -H "Authorization: $API_KEY" \
+  -H "Content-Type: application/json" \
+  "$API_URL" \
+  -d "{\"screeningState\": $COMPLETED}" >> $vetzukiLog 2>&1
+
+# Send data to scoring engine. Do not wrap lines in base64 encoding
+curl -X POST \
+  -H "Authorization: $API_KEY" \
+  -H "Content-Type: application/json" \
+  "$SCORING_URL" \
+  -d "{\"prospectURLID\":\"$USER\", \
+       \"examLog\": \"$(cat $logFile | base64 -w 0)\", \
+       \"vetzukiLog\": \"$(cat $vetzukiLog | base64 -w 0)\"}" >> $vetzukiLog 2>&1
+
 # Allow command failures
 set +e
 # Clean-up the environment when things the exam container exits
