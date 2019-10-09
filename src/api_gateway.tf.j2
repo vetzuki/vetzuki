@@ -57,6 +57,215 @@ resource "aws_api_gateway_rest_api" "api" {
     name = "vetzuki-${var.vetzukiEnvironment}"
     policy = "${file("${var.vetzukiEnvironment}.api_gateway.policy")}"
 }
+
+# GET /
+resource "aws_api_gateway_method" "root" {
+    rest_api_id = "${aws_api_gateway_rest_api.api.id}"
+    resource_id = "${aws_api_gateway_rest_api.api.root_resource_id}"
+    http_method = "GET"
+    authorization = "NONE"
+}
+resource "aws_api_gateway_method_response" "root_200" {
+    rest_api_id = "${aws_api_gateway_rest_api.api.id}"
+    resource_id = "${aws_api_gateway_rest_api.api.root_resource_id}"
+    http_method = "${aws_api_gateway_method.root.http_method}"
+    status_code = "200"
+    response_parameters = {
+      "method.response.header.Content-Type" = true
+    }
+}
+resource "aws_api_gateway_integration_response" "root_200" {
+    rest_api_id = "${aws_api_gateway_rest_api.api.id}"
+    resource_id = "${aws_api_gateway_rest_api.api.root_resource_id}"
+    http_method = "${aws_api_gateway_method.root.http_method}"
+    status_code = "${aws_api_gateway_method_response.root_200.status_code}"
+    response_parameters = {
+      "method.response.header.Content-Type" = "integration.response.header.Content-Type"
+    }
+}
+
+# GET / => S3://www.{{ vetzuki_environment }}.vetzuki.com/index.html
+resource "aws_api_gateway_integration" "root" {
+    rest_api_id = "${aws_api_gateway_rest_api.api.id}"
+    resource_id = "${aws_api_gateway_rest_api.api.root_resource_id}"
+    http_method = "${aws_api_gateway_method.root.http_method}"
+    integration_http_method = "GET"
+    type = "AWS"
+    # connection_type = "VPC_LINK"
+    # connection_id = "${aws_vpc_endpoint.s3.id}"
+    uri = "arn:aws:apigateway:us-west-2:s3:path/www.${var.vetzukiEnvironment}.vetzuki.com/index.html"
+    # uri = "arn:aws:s3:::www.${var.vetzukiEnvironment}.vetzuki.com"
+    credentials = "${aws_iam_role.getUIResourcesRole.arn}"
+    depends_on = [
+        "aws_vpc_endpoint.s3",
+        "aws_vpc_endpoint_route_table_association.s3EndpointRoutes",
+        "aws_api_gateway_method.root"
+    ]
+}
+# /callback
+resource "aws_api_gateway_resource" "callback" {
+    path_part = "callback"
+    parent_id = "${aws_api_gateway_rest_api.api.root_resource_id}"
+    rest_api_id = "${aws_api_gateway_rest_api.api.id}"
+}
+resource "aws_api_gateway_method" "callback" {
+    rest_api_id = "${aws_api_gateway_rest_api.api.id}"
+    resource_id = "${aws_api_gateway_resource.callback.id}"
+    http_method = "GET"
+    authorization = "NONE"
+}
+resource "aws_api_gateway_method_response" "callback_200" {
+    rest_api_id = "${aws_api_gateway_rest_api.api.id}"
+    resource_id = "${aws_api_gateway_resource.callback.id}"
+    http_method = "${aws_api_gateway_method.callback.http_method}"
+    status_code = "200"
+    response_parameters = {
+      "method.response.header.Content-Type" = true
+    }
+}
+resource "aws_api_gateway_integration_response" "callback_200" {
+    rest_api_id = "${aws_api_gateway_rest_api.api.id}"
+    resource_id = "${aws_api_gateway_resource.callback.id}"
+    http_method = "${aws_api_gateway_method.callback.http_method}"
+    status_code = "${aws_api_gateway_method_response.callback_200.status_code}"
+    response_parameters = {
+      "method.response.header.Content-Type" = "integration.response.header.Content-Type"
+    }
+}
+
+# GET /callback => S3://www.{{ vetzuki_environment }}.vetzuki.com/callback
+resource "aws_api_gateway_integration" "callback" {
+    rest_api_id = "${aws_api_gateway_rest_api.api.id}"
+    resource_id = "${aws_api_gateway_resource.callback.id}"
+    http_method = "${aws_api_gateway_method.callback.http_method}"
+    integration_http_method = "GET"
+    type = "AWS"
+    uri = "arn:aws:apigateway:us-west-2:s3:path/www.${var.vetzukiEnvironment}.vetzuki.com/index.html"
+    credentials = "${aws_iam_role.getUIResourcesRole.arn}"
+    depends_on = [
+        "aws_vpc_endpoint.s3",
+        "aws_vpc_endpoint_route_table_association.s3EndpointRoutes",
+        "aws_api_gateway_method.callback"
+    ]
+}
+# /css
+resource "aws_api_gateway_resource" "cssRoot" {
+    path_part = "css"
+    parent_id = "${aws_api_gateway_rest_api.api.root_resource_id}"
+    rest_api_id = "${aws_api_gateway_rest_api.api.id}"
+}
+# /css/{cssFile}
+resource "aws_api_gateway_resource" "css" {
+  path_part = "{cssFile}"
+  parent_id = "${aws_api_gateway_resource.cssRoot.id}"
+  rest_api_id = "${aws_api_gateway_rest_api.api.id}"
+}
+resource "aws_api_gateway_method" "css" {
+    rest_api_id = "${aws_api_gateway_rest_api.api.id}"
+    resource_id = "${aws_api_gateway_resource.css.id}"
+    http_method = "GET"
+    authorization = "NONE"
+    request_parameters = {
+      "method.request.path.cssFile" = true
+    }
+}
+resource "aws_api_gateway_method_response" "css_200" {
+    rest_api_id = "${aws_api_gateway_rest_api.api.id}"
+    resource_id = "${aws_api_gateway_resource.css.id}"
+    http_method = "${aws_api_gateway_method.css.http_method}"
+    status_code = "200"
+    response_parameters = {
+      "method.response.header.Content-Type" = true
+    }
+}
+resource "aws_api_gateway_integration_response" "css_200" {
+    rest_api_id = "${aws_api_gateway_rest_api.api.id}"
+    resource_id = "${aws_api_gateway_resource.css.id}"
+    http_method = "${aws_api_gateway_method.css.http_method}"
+    status_code = "${aws_api_gateway_method_response.css_200.status_code}"
+    response_parameters = {
+      "method.response.header.Content-Type" = "integration.response.header.Content-Type"
+    }
+}
+
+# GET /css/{cssFile} => S3://www.{{ vetzuki_environment }}.vetzuki.com/css/{cssFile}
+resource "aws_api_gateway_integration" "css" {
+    rest_api_id = "${aws_api_gateway_rest_api.api.id}"
+    resource_id = "${aws_api_gateway_resource.css.id}"
+    http_method = "${aws_api_gateway_method.css.http_method}"
+    integration_http_method = "GET"
+    type = "AWS"
+    uri = "arn:aws:apigateway:us-west-2:s3:path/www.${var.vetzukiEnvironment}.vetzuki.com/css/{cssFile}"
+    credentials = "${aws_iam_role.getUIResourcesRole.arn}"
+    request_parameters = {
+      "integration.request.path.cssFile" = "method.request.path.cssFile"
+    }
+    depends_on = [
+        "aws_vpc_endpoint.s3",
+        "aws_vpc_endpoint_route_table_association.s3EndpointRoutes",
+        "aws_api_gateway_method.css"
+    ]
+}
+
+# /js
+resource "aws_api_gateway_resource" "jsRoot" {
+    path_part = "js"
+    parent_id = "${aws_api_gateway_rest_api.api.root_resource_id}"
+    rest_api_id = "${aws_api_gateway_rest_api.api.id}"
+}
+# /js/{jsFile}
+resource "aws_api_gateway_resource" "js" {
+  path_part = "{jsFile}"
+  parent_id = "${aws_api_gateway_resource.jsRoot.id}"
+  rest_api_id = "${aws_api_gateway_rest_api.api.id}"
+}
+resource "aws_api_gateway_method" "js" {
+    rest_api_id = "${aws_api_gateway_rest_api.api.id}"
+    resource_id = "${aws_api_gateway_resource.js.id}"
+    http_method = "GET"
+    authorization = "NONE"
+    request_parameters = {
+      "method.request.path.jsFile" = true
+    }
+}
+resource "aws_api_gateway_method_response" "js_200" {
+    rest_api_id = "${aws_api_gateway_rest_api.api.id}"
+    resource_id = "${aws_api_gateway_resource.js.id}"
+    http_method = "${aws_api_gateway_method.js.http_method}"
+    status_code = "200"
+    response_parameters = {
+      "method.response.header.Content-Type" = true
+    }
+}
+resource "aws_api_gateway_integration_response" "js_200" {
+    rest_api_id = "${aws_api_gateway_rest_api.api.id}"
+    resource_id = "${aws_api_gateway_resource.js.id}"
+    http_method = "${aws_api_gateway_method.js.http_method}"
+    status_code = "${aws_api_gateway_method_response.js_200.status_code}"
+    response_parameters = {
+      "method.response.header.Content-Type" = "integration.response.header.Content-Type"
+    }
+}
+
+# GET /js/{jsFile} => S3://www.{{ vetzuki_environment }}.vetzuki.com/js/{jsFile}
+resource "aws_api_gateway_integration" "js" {
+    rest_api_id = "${aws_api_gateway_rest_api.api.id}"
+    resource_id = "${aws_api_gateway_resource.js.id}"
+    http_method = "${aws_api_gateway_method.js.http_method}"
+    integration_http_method = "GET"
+    type = "AWS"
+    uri = "arn:aws:apigateway:us-west-2:s3:path/www.${var.vetzukiEnvironment}.vetzuki.com/js/{jsFile}"
+    credentials = "${aws_iam_role.getUIResourcesRole.arn}"
+    request_parameters = {
+      "integration.request.path.jsFile" = "method.request.path.jsFile"
+    }
+    depends_on = [
+        "aws_vpc_endpoint.s3",
+        "aws_vpc_endpoint_route_table_association.s3EndpointRoutes",
+        "aws_api_gateway_method.js"
+    ]
+}
+
 # /p
 resource "aws_api_gateway_resource" "prospectResources" {
     path_part = "p"

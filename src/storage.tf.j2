@@ -1,0 +1,18 @@
+resource "aws_s3_bucket" "bucket" {
+    bucket = "www.${var.vetzukiEnvironment}.vetzuki.com"
+    acl = "private"
+    tags = {
+        Name = "www-${var.vetzukiEnvironment}"
+        Environment = "${var.vetzukiEnvironment}"
+    }
+}
+
+resource "aws_vpc_endpoint" "s3" {
+    vpc_id = "{{ vpc[vetzuki_environment] }}"
+    service_name = "com.amazonaws.{{ aws_region }}.s3"
+}
+
+resource "aws_vpc_endpoint_route_table_association" "s3EndpointRoutes" {
+    route_table_id = "${aws_route_table.private.id}"
+    vpc_endpoint_id = "${aws_vpc_endpoint.s3.id}"
+}
