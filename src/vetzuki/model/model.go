@@ -358,6 +358,30 @@ func (p *Prospect) SetScreeningState(state int) bool {
 	return true
 }
 
+// FindProspectScores : Find prospects and attach scores
+func (e *Employer) FindProspectScores() ([]*ProspectWithScore, bool) {
+	prospects, ok := e.FindProspects()
+	if !ok {
+		log.Printf("error: unable to find prospects for employer %s", e.Email)
+		return nil, false
+	}
+	var prospectsWithScores []*ProspectWithScore
+	for _, prospect := range prospects {
+		withScore := &ProspectWithScore{
+			Prospect: prospect,
+			Score:    nil,
+		}
+		if prospect.ScreeningState == ScreeningStateComplete {
+			score, ok := prospect.GetScore()
+			if ok {
+				withScore.Score = score
+			}
+		}
+		prospectsWithScores = append(prospectsWithScores, withScore)
+	}
+	return prospectsWithScores, true
+}
+
 // FindProspects : Find prospects associated with the Employer
 func (e *Employer) FindProspects() ([]*Prospect, bool) {
 	log.Printf("debug: finding %s prospects", e.Email)
@@ -516,6 +540,12 @@ type ProspectScore struct {
 	EndTime       time.Time `sql:"end_time" json:"endTime"`
 	Created       time.Time `sql:"created" json:"created"`
 	Modified      time.Time `sql:"modified" json:"modified"`
+}
+
+// ProspectWithScore : Prospect with scoring data
+type ProspectWithScore struct {
+	Prospect *Prospect      `json:"prospect"`
+	Score    *ProspectScore `json:"score"`
 }
 
 // Employer : An employer can hire prospects
