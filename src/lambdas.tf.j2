@@ -210,6 +210,48 @@ resource "aws_lambda_function" "createScore" {
     }
 }
 
+# GetProspectScore: Lambda
+resource "aws_lambda_function" "getProspectScore" {
+    filename = "getProspectScore/lambda.zip"
+    function_name = "getProspectScore-${var.vetzukiEnvironment}"
+    role = "${aws_iam_role.lambdaRole.arn}"
+    handler = "handler"
+    runtime = "go1.x"
+    source_code_hash = "${filebase64sha256("getProspectScore/lambda.zip")}"
+    timeout = 10
+    depends_on = [
+      "aws_subnet.privateA",
+      "aws_subnet.privateB"
+    ]
+    vpc_config {
+      subnet_ids = [
+        "${aws_subnet.privateA.id}",
+        "${aws_subnet.privateB.id}"
+      ]
+      security_group_ids = ["{{ db_security_group[vetzuki_environment] }}"]
+    }
+    environment {
+      variables = {
+        LDAP_HOST = "{{ ldap[vetzuki_environment].host }}"
+        BASE_DN = "{{ ldap[vetzuki_environment].base_dn }}"
+        GROUPS_DN = "{{ ldap[vetzuki_environment].groups_dn }}"
+        BIND_DN = "{{ ldap[vetzuki_environment].bind_dn }}"
+        BIND_PASSWORD = "{{ ldap[vetzuki_environment].bind_password }}"
+        VETZUKI_ENVIRONMENT = "{{ vetzuki_environment }}"
+        REDIS_HOST = "{{ redis[vetzuki_environment].host }}"
+        REDIS_PASSWORD = "{{ redis[vetzuki_environment].password }}"
+        REDIS_DB = "{{ redis[vetzuki_environment].db }}"
+        SSH_URL = "ssh.${var.vetzukiEnvironment}.vetzuki.com"
+        DB_HOST = "db.${var.vetzukiEnvironment}.vetzuki.com"
+        DB_PORT = "${var.db_port}"
+        DB_USERNAME = "${var.db_user}"
+        DB_PASSWORD = "${var.db_password}"
+        DB_NAME = "${var.db_name}"
+        ADMIN_WHITELIST = "{{ adminWhitelist | join(',') }}"
+      }
+    }
+}
+
 # UpdateExamState: Lambda
 resource "aws_lambda_function" "updateExamState" {
     filename = "updateExamState/lambda.zip"
@@ -272,6 +314,14 @@ resource "aws_lambda_permission" "getProspectsLambdaPermission" {
     statement_id = "AllowExecutionFromAPIGateway"
     action = "lambda:InvokeFunction"
     function_name = "${aws_lambda_function.getProspects.function_name}"
+    principal = "apigateway.amazonaws.com"
+}
+
+# GetProspectScore: Allow APIGateway to invoke Lambda
+resource "aws_lambda_permission" "getProspectScore" {
+    statement_id = "AllowExecutionFromAPIGateway"
+    action = "lambda:InvokeFunction"
+    function_name = "${aws_lambda_function.getProspectScore.function_name}"
     principal = "apigateway.amazonaws.com"
 }
 
