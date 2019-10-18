@@ -3,7 +3,7 @@ resource "aws_lambda_function" "getProspectLambda" {
     filename = "getProspect/lambda.zip"
     function_name = "${var.getProspectLambdaName}"
     role = "${aws_iam_role.lambdaRole.arn}"
-    handler = "handler"
+    handler = "lambda"
     runtime = "go1.x"
     source_code_hash = "${filebase64sha256("getProspect/lambda.zip")}"
     timeout = 10
@@ -46,7 +46,7 @@ resource "aws_lambda_function" "getProspects" {
     filename = "getProspects/lambda.zip"
     function_name = "getProspects-${var.vetzukiEnvironment}"
     role = "${aws_iam_role.lambdaRole.arn}"
-    handler = "handler"
+    handler = "lambda"
     runtime = "go1.x"
     source_code_hash = "${filebase64sha256("getProspects/lambda.zip")}"
     timeout = 10
@@ -88,7 +88,7 @@ resource "aws_lambda_function" "createProspect" {
     filename = "createProspect/lambda.zip"
     function_name = "createProspect-${var.vetzukiEnvironment}"
     role = "${aws_iam_role.lambdaRole.arn}"
-    handler = "handler"
+    handler = "lambda"
     runtime = "go1.x"
     source_code_hash = "${filebase64sha256("createProspect/lambda.zip")}"
     timeout = 10
@@ -130,7 +130,7 @@ resource "aws_lambda_function" "employerLogin" {
     filename = "employerLogin/lambda.zip"
     function_name = "employerLogin-${var.vetzukiEnvironment}"
     role = "${aws_iam_role.lambdaRole.arn}"
-    handler = "handler"
+    handler = "lambda"
     runtime = "go1.x"
     source_code_hash = "${filebase64sha256("employerLogin/lambda.zip")}"
     timeout = 10
@@ -172,7 +172,7 @@ resource "aws_lambda_function" "createScore" {
     filename = "createScore/lambda.zip"
     function_name = "createScore-${var.vetzukiEnvironment}"
     role = "${aws_iam_role.lambdaRole.arn}"
-    handler = "handler"
+    handler = "lambda"
     runtime = "go1.x"
     source_code_hash = "${filebase64sha256("createScore/lambda.zip")}"
     timeout = 10
@@ -215,7 +215,7 @@ resource "aws_lambda_function" "getProspectScore" {
     filename = "getProspectScore/lambda.zip"
     function_name = "getProspectScore-${var.vetzukiEnvironment}"
     role = "${aws_iam_role.lambdaRole.arn}"
-    handler = "handler"
+    handler = "lambda"
     runtime = "go1.x"
     source_code_hash = "${filebase64sha256("getProspectScore/lambda.zip")}"
     timeout = 10
@@ -257,7 +257,7 @@ resource "aws_lambda_function" "getProspectScores" {
     filename = "getProspectScores/lambda.zip"
     function_name = "getProspectScores-${var.vetzukiEnvironment}"
     role = "${aws_iam_role.lambdaRole.arn}"
-    handler = "handler"
+    handler = "lambda"
     runtime = "go1.x"
     source_code_hash = "${filebase64sha256("getProspectScores/lambda.zip")}"
     timeout = 10
@@ -299,7 +299,7 @@ resource "aws_lambda_function" "updateExamState" {
     filename = "updateExamState/lambda.zip"
     function_name = "updateExamState-${var.vetzukiEnvironment}"
     role = "${aws_iam_role.lambdaRole.arn}"
-    handler = "handler"
+    handler = "lambda"
     runtime = "go1.x"
     source_code_hash = "${filebase64sha256("updateExamState/lambda.zip")}"
     timeout = 10

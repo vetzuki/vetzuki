@@ -42,8 +42,8 @@ func init() {
 // Connect : Create a new database connection
 func Connect() {
 	var connectionString string
-	if err := godotenv.Load("../.env"); err != nil {
-		log.Printf("error: failed to locate .env")
+	if err := godotenv.Load(".env"); err != nil {
+		log.Printf("warning: failed to locate .env")
 	}
 
 	dbHost = os.Getenv(envDBHost)

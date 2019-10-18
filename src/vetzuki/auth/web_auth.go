@@ -3,6 +3,7 @@ package auth
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/joho/godotenv"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -11,13 +12,15 @@ import (
 )
 
 const (
-	envAdminWhitelist = "ADMIN_WHITELIST"
-	envTeeshAPIKEY    = "TEESH_API_KEY"
+	envAdminWhitelist     = "ADMIN_WHITELIST"
+	envTeeshAPIKEY        = "TEESH_API_KEY"
+	envTokenValidationURL = "ACCESS_TOKEN_VALIDATION_URL"
 )
 
 var (
-	adminWhitelist = []string{}
-	teeshAPIKey    = ""
+	adminWhitelist           = []string{}
+	teeshAPIKey              = ""
+	accessTokenValidationURL = "https://vetzuki-poc.auth0.com/userinfo"
 )
 
 // JWTClaims : Claims in JWT
@@ -29,6 +32,9 @@ type JWTClaims struct {
 }
 
 func init() {
+	if err := godotenv.Load(".env"); err != nil {
+		log.Printf("warning: failed to locate .env")
+	}
 	if w := os.Getenv(envAdminWhitelist); len(w) > 0 {
 		members := strings.Split(w, ",")
 		for _, member := range members {
@@ -40,7 +46,10 @@ func init() {
 		}
 		log.Printf("info: whitelisted %d admins", len(adminWhitelist))
 	}
-
+	if u := os.Getenv(envTokenValidationURL); len(u) > 0 {
+		accessTokenValidationURL = u
+		log.Printf("info: using %s for access token validation", accessTokenValidationURL)
+	}
 	teeshAPIKey = os.Getenv(envTeeshAPIKEY)
 
 }
@@ -70,7 +79,6 @@ func ValidateAPIKey(apiKey string) bool {
 // token. Validation returns a JWT profile.
 func ValidateToken(accessToken string) (*JWTClaims, bool) {
 	accessToken = strings.TrimSpace(accessToken)
-	accessTokenValidationURL := "https://vetzuki-poc.auth0.com/userinfo"
 	log.Printf("debug: validating token %s against %s", accessToken, accessTokenValidationURL)
 	r, err := http.NewRequest("GET", accessTokenValidationURL, nil)
 	if err != nil {

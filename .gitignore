@@ -14,7 +14,7 @@ sslroot
 .env
 node_modules
 
-handler
+lambda
 lambda.zip
 
 **/.vscode

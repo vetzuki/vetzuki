@@ -1,13 +1,14 @@
-
+OUTFILE=lambda
+PACKAGE=lambda.zip
 deployment: clean build zip
 
 clean:
-	rm -f lambda.zip
-	rm -f handler
+	rm -f $(PACKAGE)
+	rm -f $(OUTFILE)
 
 build:
-	go build -o handler main.go
+	go build -o $(OUTFILE) main.go
 
 zip:
-	zip lambda.zip handler
+	zip $(PACKAGE) $(OUTFILE)
 
