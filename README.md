@@ -33,6 +33,9 @@ Create the software environment and reset the LDAP seeds
 ```
 ansible-playbook -i inventory poc.yml -e '{"drop_prospects_ou":true}'
 ```
+## /src
+
+Database schema, AWS deployment descriptor, and development environment setup playbooks. More details available in [README](src/README.md)
 
 ## /exam
 
@@ -44,8 +47,8 @@ Includes `Dockerfile` for building the proctor container. This is what monitors 
 
 ## /src/vetzuki
 
-The Go codebase for vetzuki, `github.com/vetzuki/vetzuki` is housed here. It should be linked into the `$GOPATH` to run go tools on the codebase. It has its own [README](src/vetzuki/README).
+The Go codebase for vetzuki, `github.com/vetzuki/vetzuki` is housed here. It should be linked into the `$GOPATH` to run go tools on the codebase. It has its own [README](src/vetzuki/README.md).
 
 ## /src/ui
 
-VetZuki's UI code is stored here and built with `ansible-playbook build.yml`. Deploying the environment to run the code is handled by `terraform api_gateway.tf`. More detail is available in the sub-project's [README](src/ui/README).
+VetZuki's UI code is stored here and built with `ansible-playbook build.yml`. Deploying the environment to run the code is handled by `terraform api_gateway.tf`. More detail is available in the sub-project's [README](src/ui/README.md).

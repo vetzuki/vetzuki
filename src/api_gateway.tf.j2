@@ -430,6 +430,32 @@ resource "aws_api_gateway_integration" "createScore" {
     depends_on = ["aws_lambda_function.createScore"]
 }
 
+# /api/networks
+resource "aws_api_gateway_resource" "networkResources" {
+    path_part = "networks"
+    parent_id = "${aws_api_gateway_resource.apiRoot.id}"
+    rest_api_id = "${aws_api_gateway_rest_api.api.id}"
+}
+
+# POST /api/networks
+resource "aws_api_gateway_method" "createProspectNetwork" {
+    rest_api_id = "${aws_api_gateway_rest_api.api.id}"
+    resource_id = "${aws_api_gateway_resource.networkResources.id}"
+    http_method = "POST"
+    authorization = "NONE"
+}
+
+# POST /api/networks => Lambda
+resource "aws_api_gateway_integration" "createProspectNetwork" {
+    rest_api_id = "${aws_api_gateway_rest_api.api.id}"
+    resource_id = "${aws_api_gateway_resource.networkResources.id}"
+    http_method = "${aws_api_gateway_method.createProspectNetwork.http_method}"
+    integration_http_method = "POST"
+    type = "AWS_PROXY"
+    uri = "arn:aws:apigateway:${var.awsRegion}:lambda:path/2015-03-31/functions/${aws_lambda_function.createProspectNetwork.arn}/invocations"
+    depends_on = ["aws_lambda_function.createProspectNetwork"]
+}
+
 # GET /api/scores
 resource "aws_api_gateway_method" "getProspectScores" {
     rest_api_id = "${aws_api_gateway_rest_api.api.id}"

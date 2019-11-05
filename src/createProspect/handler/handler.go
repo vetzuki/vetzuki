@@ -142,7 +142,6 @@ func Handler(ctx context.Context, r events.APIGatewayProxyRequest) (events.APIGa
 	}
 
 	var screening ScreeningRequest
-	log.Printf("debug: create prospect request %#v\n", r.Body)
 	err := json.Unmarshal([]byte(r.Body), &screening)
 	log.Printf("debug: creating employer %d screening for %s", screening.EmployerID, screening.Email)
 	if err != nil {

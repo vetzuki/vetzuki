@@ -51,6 +51,7 @@ func init() {
 		log.Printf("info: using %s for access token validation", accessTokenValidationURL)
 	}
 	teeshAPIKey = os.Getenv(envTeeshAPIKEY)
+	log.Printf("debug: initialized teesh API key to %s", teeshAPIKey)
 
 }
 func checkAdminWhitelist(jwtClaims JWTClaims) bool {

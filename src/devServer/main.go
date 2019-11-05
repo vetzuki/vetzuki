@@ -8,6 +8,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/joho/godotenv"
 	createProspect "github.com/vetzuki/createProspect/handler"
+	createProspectNetwork "github.com/vetzuki/createProspectNetwork/handler"
 	createScore "github.com/vetzuki/createScore/handler"
 	employerLogin "github.com/vetzuki/employerLogin/handler"
 	getProspect "github.com/vetzuki/getProspect/handler"
@@ -52,14 +53,14 @@ func handlerWrapper(handler LambdaHandler, w http.ResponseWriter, r *http.Reques
 }
 func mkWrapperHandler(handlerMap map[string]LambdaHandler) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		fmt.Printf("debug: %s %s", r.Method, r.URL.Path)
+		fmt.Printf("debug: %s %s\n", r.Method, r.URL.Path)
 		for method, lambdaHandler := range handlerMap {
 			if r.Method == method {
 				handlerWrapper(lambdaHandler, w, r)
 				return
 			}
 		}
-		fmt.Printf("error: %s %s not supported", r.Method, r.URL.Path)
+		fmt.Printf("error: %s %s not supported\n", r.Method, r.URL.Path)
 		w.WriteHeader(404)
 	}
 }
@@ -74,6 +75,10 @@ func main() {
 	router.HandleFunc("/api/prospects", mkWrapperHandler(map[string]LambdaHandler{
 		"POST": createProspect.Handler,
 		"GET":  getProspects.Handler,
+	}))
+	// POST : /api/networks
+	router.HandleFunc("/api/networks", mkWrapperHandler(map[string]LambdaHandler{
+		"POST": createProspectNetwork.Handler,
 	}))
 	// POST: /api/login
 	router.HandleFunc("/api/login", mkWrapperHandler(map[string]LambdaHandler{
@@ -103,7 +108,7 @@ func main() {
 		encoder := json.NewEncoder(w)
 		err := encoder.Encode(claims)
 		if err != nil {
-			fmt.Printf("error: while encoding claims: %s", err)
+			fmt.Printf("error: while encoding claims: %s\n", err)
 		}
 		// w.WriteHeader(200)
 	})

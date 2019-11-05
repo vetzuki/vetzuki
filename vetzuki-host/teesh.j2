@@ -17,14 +17,18 @@ APP_ROOT=/vetZuki
 API_KEY={{ teesh.api_key }}
 API_URL=https://www.{{ vetzuki_environment }}.vetzuki.com/api/exams/$USER
 SCORING_URL=https://www.{{ vetzuki_environment }}.vetzuki.com/api/scores
+NETWORKS_URL=https://www.{{ vetzuki_environment }}.vetzuki.com/api/networks
 ACTIVE={{ teesh.state.active }}
 COMPLETED={{ teesh.state.completed }}
+# Host configuration
+ec2InstanceID=$(curl -ss http://169.254.169.254/latest/meta-data/instance-id)
 
 # Vetzuki configuration
 prospectID=$USER
 configRoot=$APP_ROOT/$prospectID
 vetzukiLog=$configRoot/vetzuki.log
 examLog=$configRoot/exam.log
+networkConfigFile=$configRoot/networkConfig.env
 examImage={{ exam.image }}:{{ exam.version }}
 proctorImage={{ proctor.image }}:{{ proctor.version }}
 combinedPublicKeys=authorized_keys
@@ -39,18 +43,36 @@ prospectPublicKey=$prospectPrivateKey.pub
 examContainerName=exam_$prospectID
 proctorContainerName=proctor_$prospectID
 
-# Bridge configuration
-# TODO: Use IP and port assigner
-bridgeName=prospect_$prospectID
-bridgeNetwork=10.0.1.0/24
-bridgeGateway=10.0.1.1
-proctorContainerIP=10.0.1.222
-examContainerIP=10.0.1.2
-examContainerSSHPort=2022
-assignmentIP=10.0.1.5/24
-prospectIP=10.0.1.5
-
 set -e
+
+# Create prospect configuration root
+[ -d $configRoot ] && rm -rf $configRoot > /dev/null 2>&1
+mkdir -p $configRoot > /dev/null 2>&1
+echo "Spinning up containers for $USER" >> $vetzukiLog
+cd $configRoot >> $vetzukiLog 2>&1
+
+# Create container environment configuration
+curl -H"Authorization: $API_KEY" \
+  -ss \
+  --data "{\"prospectURLID\":\"$prospectID\", \"ec2InstanceID\":\"$ec2InstanceID\"}" \
+  $NETWORKS_URL \
+  | jq '"bridgeNetwork=\(.network)/24", "network=\(.network)", "examContainerIP=\(.examContainerIP)", "proctorContainerIP=\(.proctorContainerIP)", "networkConfigID=\(.id)", "networkMask=\(.mask)", "bridgeGateway=\(.gatewayIP)", "examContainerSSHPort=\(.SSHPort)"' \
+  | sed -e 's/"//g' > $networkConfigFile
+
+echo "created network config" >> $vetzukiLog
+cat $networkConfigFile >> $vetzukiLog
+
+. $networkConfigFile
+# Bridge configuration
+bridgeName=prospect_$prospectID
+if [ $network == "null" ] ; then
+  echo "error: no network configuration found" >> $vetzukiLog
+  exit 1
+fi
+# Set the final octet of the network to provide an IP for the assignment
+assignmentIP=$(echo $network | cut -d. -f-3).5/24
+prospectIP=$(echo $network | cut -d. -f-3).5
+
 # Kill any existing containers and networks
 if [[ -n $(docker ps --filter "name=$examContainerName" | grep -v CONTAINER) ]] ; then
   docker kill $examContainerName >> $vetzukiLog 2>&1
@@ -73,12 +95,6 @@ fi
 # Generates a log message "Login succeeded" to stdout which is nice to 
 # help the prospect
 $(aws ecr get-login --no-include-email --region us-west-2) 2> /dev/null
-
-# Create prospect configuration root
-[ -d $configRoot ] && rm -rf $configRoot > /dev/null 2>&1
-mkdir -p $configRoot > /dev/null 2>&1
-echo "Spinning up containers for $USER" >> $vetzukiLog
-cd $configRoot >> $vetzukiLog 2>&1
 
 # Create the POC assigment
 echo "Assign the IP $assignmentIP to the eth0 interface" > assignment
@@ -150,8 +166,6 @@ echo "Marking $USER screening state as Active at $API_URL" >> $vetzukiLog 2>&1
 curl -X PUT -H "Authorization: $API_KEY" "$API_URL" -d "{\"screeningState\": $ACTIVE}" >> $vetzukiLog 2>&1
 # Connect the Prospect to their exam container
 echo "Tunneling $prospect to their exam container 127.0.0.1:$examContainerSSHPort using $prospectPrivateKey" >> $vetzukiLog 2>&1
-
-# Perhaps the grep isn't a very good idea. The intent is to not show that the session exitted
 
 ssh \
     -o "StrictHostKeyChecking=no" \
