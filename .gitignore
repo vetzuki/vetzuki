@@ -20,3 +20,5 @@ lambda.zip
 **/.vscode
 
 src/*.tf
+# UI has its own repo
+src/ui/vetzuki
