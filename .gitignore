@@ -1,8 +1,10 @@
 .terraform
 .*.swp
+
 bin/
 downloads/
 authorized_keys
+aws.config
 
 terraform.tfstate*
 *.retry

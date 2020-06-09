@@ -1,0 +1,239 @@
+- name: Development environment
+  hosts: localhost
+  vars:
+      docker_host: "tcp://localhost:2375"
+      teesh:
+        path: /usr/local/bin/teesh
+        api_key: teeshApiKey
+      drop_prospects_ou: false
+      env:
+        SSH_URL: 10.0.1.2
+        ADMIN_WHITELIST: admin@localhost
+        ACCESS_TOKEN_VALIDATION_URL: "http://localhost:9000/validateToken"
+      apt_packages:
+        - python-pip
+        - python3-pip
+        - libldap2-dev # python://python-ldap
+        - libsasl2-dev # python://python-ldap
+        - ldap-utils # ldapsearch
+        - redis-tools # redis-cli
+      vetzuki_environment: development
+      db:
+        username: postgres
+        password: "{{ poc_password }}"
+        database: vetzuki
+        host: localhost
+        network_name: "vetzuki-{{ vetzuki_environment }}-db"
+        network_subnet: "192.168.102.0/29"
+        network_gateway: "192.168.102.1"
+        ip: "192.168.102.2"
+        domain: "{{ vetzuki_environment }}.vetzuki.com"
+      ldap:
+          container:
+            name: "ldap-{{ vetzuki_environment }}"
+            image: "osixia/openldap:1.2.5"
+          etc_ldap_slapd: "{{ ansible_env.PWD }}/_docker/ldap/etc/ldap/slapd.d"
+          var_lib_ldap: "{{ ansible_env.PWD }}/_docker/ldap/var/lib/ldap"
+          network_name: "vetzuki-{{ vetzuki_environment }}-ldap"
+          network_subnet: "192.168.100.0/29"
+          network_gateway: "192.168.100.1"
+          password: "{{ vetzuki_environment }}"
+          ip: "192.168.100.2"
+          domain: "{{ vetzuki_environment }}.vetzuki.com"
+      redis:
+        container:
+          name: "redis-{{ vetzuki_environment }}"
+          image: "redis"
+        network_name: "vetzuki-{{ vetzuki_environment }}-redis"
+        network_subnet: "192.168.101.0/29"
+        network_gateway: "192.168.101.1"
+        ip: "192.168.101.2"
+        data: "{{ ansible_env.PWD }}/_docker/redis/data"
+      exam:
+        container:
+          name: "exam-{{ vetzuki_environment }}"
+          image: "588487667149.dkr.ecr.us-west-2.amazonaws.com/vetzuki-exam:0.1"
+      proctor:
+        container:
+          name: "proctor-{{ vetzuki_environment }}"
+          image: "588487667149.dkr.ecr.us-west-2.amazonaws.com/vetzuki-proctor:0.1"
+  tasks:
+      # Windows: Enable HyperV and Containers
+      #  - install Docker Desktop and enable TCP listener
+      - name: Start docker daemon
+        become: yes
+        service:
+          name: docker
+          state: started
+      - name: Apt packages
+        become: yes
+        apt:
+          name: "{{ apt_packages }}"
+          state: present
+        
+      - pip: name=docker extra_args="--user"
+      - pip: name=python-ldap extra_args="--user"
+
+      - name: Remove docker data directories
+        file:
+          state: absent
+          path: "{{ item }}"
+        loop: 
+          - "{{ ldap.var_lib_ldap }}"
+          - "{{ ldap.etc_ldap_slapd }}"
+          - "{{ redis.data }}"
+
+      - name: Create docker data directories
+        file:
+          state: directory
+          path: "{{ item }}"
+        loop: 
+          - "{{ ldap.var_lib_ldap }}"
+          - "{{ ldap.etc_ldap_slapd }}"
+          - "{{ redis.data }}"
+
+      - docker_network:
+          docker_host: "{{ docker_host }}"
+          name: "{{ ldap.network_name }}"
+          ipam_config:
+              - subnet: "{{ ldap.network_subnet }}"
+                gateway: "{{ ldap.network_gateway }}"
+      - docker_network:
+          docker_host: "{{ docker_host }}"
+          name: "{{ redis.network_name }}"
+          ipam_config:
+            - subnet: "{{ redis.network_subnet }}"
+              gateway: "{{ redis.network_gateway }}"
+      - docker_network:
+          docker_host: "{{ docker_host }}"
+          name: "{{ db.network_name }}"
+          ipam_config:
+            - subnet: "{{ db.network_subnet }}"
+              gateway: "{{ db.network_gateway }}"
+      - name: LDAP Container
+        docker_container:
+          docker_host: "{{ docker_host }}"
+          name: "{{ ldap.container.name }}"
+          image: "{{ ldap.container.image }}"
+          state: started
+          recreate: yes
+          published_ports: ["636:636/tcp", "389:389/tcp"]
+          env:
+              LDAP_ORGANISATION: vetzuki
+              LDAP_DOMAIN: "{{ ldap.domain }}"
+              LDAP_ADMIN_PASSWORD: "{{ vetzuki_environment }}"
+          networks_cli_compatible: yes
+          networks:
+              - name: "{{ ldap.network_name }}"
+                ipv4_address: "{{ ldap.ip }}"
+          volumes:
+              - "{{ ldap.var_lib_ldap }}:/var/lib/ldap:rw"
+              - "{{ ldap.etc_ldap_slapd }}:/etc/ldap/slapd.d:rw"
+      - include_vars:
+          file: "{{ ansible_env.PWD}}/seeds.{{ vetzuki_environment }}.json"
+          name: seeds
+      # Give LDAP a moment to start-up
+      - pause: seconds=1
+      - ldap_entry:
+          dn: "ou=prospects,dc={{ vetzuki_environment }},dc=vetzuki,dc=com"
+          server_uri: "ldap://localhost:389"
+          bind_dn: "cn=admin,dc={{ vetzuki_environment }},dc=vetzuki,dc=com"
+          bind_pw: "{{ vetzuki_environment }}"
+          objectClass: organizationalUnit
+          state: present
+      - ldap_entry:
+          dn: "{{ item.dn }}"
+          server_uri: "ldap://localhost:389"
+          bind_dn: "cn=admin,dc={{ vetzuki_environment }},dc=vetzuki,dc=com"
+          bind_pw: "{{ vetzuki_environment }}"
+          state: present
+          validate_certs: no
+          attributes:
+            sn: "{{ item.name }}"
+            uid: "{{ item.name }}"
+            uidNumber: "{{ item.id }}"
+            gidNumber: "{{ item.id }}"
+            homeDirectory: "/home/{{ item.name }}"
+            loginShell: "{{ teesh.path }}"
+          objectClass:
+            - organizationalPerson
+            - posixAccount
+        with_items: "{{ seeds.ldap_users }}"
+      - name: Create Groups OU
+        ldap_entry:
+          dn: "ou=groups,dc={{ vetzuki_environment }},dc=vetzuki,dc=com"
+          server_uri: "ldap://localhost:389"
+          bind_dn: "cn=admin,dc={{ vetzuki_environment }},dc=vetzuki,dc=com"
+          bind_pw: "{{ ldap.password }}"
+          objectClass:
+            - organizationalUnit
+          state: present
+      - name: Delete docker LDAP group
+        when: drop_prospects_ou
+        ldap_entry:
+          dn: "cn=docker,ou=groups,dc={{ vetzuki_environment }},dc=vetzuki,dc=com"
+          server_uri: "ldap://localhost:389"
+          bind_dn: "cn=admin,dc={{ vetzuki_environment }},dc=vetzuki,dc=com"
+          bind_pw: "{{ ldap.password }}"
+          state: absent
+      - name: Create docker LDAP group
+        ldap_entry:
+          dn: "cn=docker,ou=groups,dc={{ vetzuki_environment }},dc=vetzuki,dc=com"
+          server_uri: "ldap://localhost:389"
+          bind_dn: "cn=admin,dc={{ vetzuki_environment }},dc=vetzuki,dc=com"
+          bind_pw: "{{ ldap.password }}"
+          objectClass: posixGroup
+          attributes:
+            gidNumber: 9999 # 993 on test system
+          state: present
+      # Warning: This is a security concern
+      - name: Add LDAP users to docker group
+        when: (vetzuki_environment == "poc") or (vetzuki_environment == "development") or (vetzuki_environment == "test")
+        loop: "{{ seeds.ldap_users }}"
+        loop_control:
+          loop_var: user
+        ldap_attr:
+          server_uri: "ldap://localhost:389"
+          bind_dn: "cn=admin,dc={{ vetzuki_environment }},dc=vetzuki,dc=com"
+          bind_pw: "{{ ldap.password }}"
+          dn: "cn=docker,ou=groups,dc={{ vetzuki_environment }},dc=vetzuki,dc=com"
+          name: memberUid
+          values: "{{ user.name }}"
+# Create Redis container
+      - name: Redis container
+        docker_container:
+          docker_host: "{{ docker_host }}"
+          name: "{{ redis.container.name }}"
+          image: "{{ redis.container.image }}"
+          state: started
+          recreate: yes
+          published_ports: ["6379:6379/tcp"]
+          env: {}
+          networks_cli_compatible: yes
+          networks:
+            - name: "{{ redis.network_name }}"
+              ipv4_address: "{{ redis.ip }}"
+          volumes:
+            - "{{ redis.data }}:/data:rw"
+      - name: Postgres
+        docker_container:
+          docker_host: "{{ docker_host }}"
+          name: "postgres-{{ vetzuki_environment }}"
+          image: postgres
+          state: started
+          recreate: yes
+          published_ports: ["5432:5432/tcp"]
+          env:
+            POSTGRES_PASSWORD: "{{ db.password }}"
+          networks_cli_compatible: yes
+          networks:
+            - name: "{{ db.network_name }}"
+              ipv4_address: "{{ db.ip }}"
+      - name: Postgres connection env
+        template:
+          src: env.j2
+          dest: "{{ ansible_env.PWD }}/devServer/.env"
+      - name: Setup database schema
+        include_role:
+          name: schema
+       

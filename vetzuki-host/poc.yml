@@ -1,0 +1,392 @@
+- name: POC Docker daemon host configuration
+  hosts: poc_exam_host
+  become: yes
+  vars:
+    vetzuki_environment: poc
+    teesh:
+      api_key: "aaac6aa8f10906d9acd8a03187ac5ed6ff6dde7bf6b703cc8227f81725399774"
+      state:
+        active: 2
+        completed: 3
+    exam:
+      image: "588487667149.dkr.ecr.us-west-2.amazonaws.com/vetzuki-exam"
+      version: 0.1
+    proctor:
+      image: "588487667149.dkr.ecr.us-west-2.amazonaws.com/vetzuki-proctor"
+      version: 0.1
+    subdomain: "{{ vetzuki_environment }}.vetzuki.com"
+    hostname: "interview.{{ subdomain }}"
+    aws_region: "us-west-2"
+    public_ip: "71.204.152.97"
+    drop_prospects_ou: no # set to true to drop LDAP seeds
+    # SANs for self-signed certs
+    csr_sans: "DNS:ldap.{{ subdomain }},DNS:redis.{{ subdomain }}"
+    sans_list: ["ldap.{{ subdomain }}", "redis.{{ subdomain }}"]
+    ca_ssl_root: "/vetZuki/ssl"
+    teesh_path: "/usr/local/bin/teesh"
+    ec2:
+      aws_access_key: "{{ poc_aws_access_key }}"
+      aws_secret_key: "{{ poc_aws_secret_key }}"
+      aws_region: "{{ aws_region }}"
+      vpc_id: "vpc-0e6c846881215aff9"
+    redis:
+      container:
+        name: "redis-{{ vetzuki_environment }}"
+        image: redis
+      network_config:
+        subnet: "192.168.1.0/29"
+        gateway: 192.168.1.1
+      ip: 192.168.1.2
+      network_name: "redis-{{ vetzuki_environment }}"
+      data: "/vetZuki/redis/data"
+    ldap:
+      container:
+        image: "osixia/openldap:1.2.5"
+        name: "ldap-{{ vetzuki_environment }}"
+      network_config:
+        subnet: "192.168.0.0/29"
+        gateway: 192.168.0.1
+      ip: 192.168.0.2
+      network_name: ldap
+      var_lib_ldap: /vetZuki/ldap/var/lib/ldap
+      etc_ldap_slapd: /vetZuki/ldap/etc/ldap/slap.d
+      domain: "{{ vetzuki_environment }}.vetzuki.com"
+      password: "{{ poc_password }}"
+    subnets:
+      poc:
+        a: "subnet-028bcbeafe9d69115"
+        b: "subnet-031837afae45ee3b8"
+    rds:
+      aws_access_key: "{{ rds_aws_access_key }}"
+      aws_secret_key: "{{ rds_aws_secret_key }}"
+      aws_region: "{{ aws_region }}"
+      instance_name: "db-{{ vetzuki_environment }}"
+      db_engine: postgres
+      size: 10
+      instance_type: db.t3.micro
+      username: vetzuki
+      master_user_password: "{{ poc_password }}"
+      password: "{{ poc_password }}"
+      tags:
+        Environment: "{{ vetzuki_environment }}"
+        Application: "vetzuki"
+  tasks:
+    - command: yum repolist | grep epel warn=no
+      register: has_epel
+    - command: "yum install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm"
+      when: has_epel.rc == 1
+    - yum: name="*" state=latest
+    - yum: name=docker state=latest
+    - yum: name=openssh-server state=latest
+    - yum: name=git state=latest
+    - yum: name=moreutils state=latest
+    - yum: name=python-pip state=latest
+    - yum: name=sssd state=latest
+    - yum: name=sssd-client state=latest
+    - yum: name=python-ldap state=latest
+    - yum: name=jq state=latest
+    - user: name=ec2-user groups=docker append=yes
+  # Install teesh
+    - name: Install teesh
+      template:
+        src: teesh.j2
+        dest: "{{ teesh_path }}"
+        mode: "0755"
+        owner: root
+        group: root
+        
+    - copy: src=sshd_config dest=/etc/ssh/sshd_config mode="0600" owner=root group=root
+# Teesh configuration root
+    - file: path=/vetZuki mode="0777" state=directory
+# Owns configurations as the connecting user on login
+    - copy: src=own_config dest=/usr/local/bin/own_config mode="4755" owner=root
+# Limit users to a single login
+    - template:
+        src: max-logins.limit.j2
+        dest: /etc/security/limits.d/00-vetzuki-max-logins.conf
+        mode: "0644"
+        owner: root
+        group: root
+    - pip: name=docker
+# Supports aws cli
+    - pip: name=boto
+    - pip: name=botocore
+    - pip: name=boto3
+# Generate self-signed certificate
+    - include_role:
+        name: ca
+# Support LDAP logins
+    - name: Configure LDAP authentication
+      command:
+        argv:
+          - authconfig
+          - "--updateall"
+          - "--ldapserver"
+          - "ldap://localhost:389"
+          - "--ldapbasedn=dc={{ vetzuki_environment }},dc=vetzuki,dc=com"
+          - "--disableldaptls"
+          - "--enablesssdauth"
+          - "--enablesssd"
+          - "--enablemkhomedir"
+    - name: Configure SSSD
+      template:
+        src: templates/etc_sssd_sssd.conf.j2
+        dest: /etc/sssd/sssd.conf
+        mode: "0600"
+# Reload services for LDAP support
+    - systemd: name=sshd state=restarted enabled=yes
+    - systemd: name=docker state=restarted enabled=yes
+    - systemd: name=nscd state=stopped enabled=no
+    - systemd: name=nslcd state=stopped enabled=no
+    - systemd: name=sssd state=restarted enabled=yes
+# LDAP and Redis data volumes
+    - name: Remove LDAP database
+      file:
+        state: absent
+        path: "{{ ldap.var_lib_ldap }}"
+    - name: Container volumes
+      loop:
+        - "{{ ldap.var_lib_ldap }}"
+        - "{{ ldap.etc_ldap_slapd }}"
+        - "{{ redis.data }}"
+      file:
+        state: directory
+        path: "{{ item }}"
+# Private LDAP and Redis networks
+    - docker_network:
+        name: "{{ ldap.network_name }}"
+        ipam_config:
+            - subnet: "{{ ldap.network_config.subnet }}"
+              gateway: "{{ ldap.network_config.gateway }}"
+    - docker_network:
+        name: "{{ redis.network_name }}"
+        ipam_config:
+            - subnet: "{{ redis.network_config.subnet }}"
+              gateway: "{{ redis.network_config.gateway }}"
+# LDAP service
+    - docker_container:
+        hostname: "ldap.{{ vetzuki_environment }}.vetzuki.com"
+        name: "{{ ldap.container.name }}"
+        image: "{{ ldap.container.image }}"
+        state: started
+        recreate: yes
+        published_ports: ["636:636/tcp", "389:389/tcp"]
+        env:
+          LDAP_ORGANISATION: vetzuki
+          LDAP_DOMAIN: "{{ ldap.domain }}"
+          LDAP_ADMIN_PASSWORD: "{{ ldap.password }}"
+          LDAP_TLS_CRT_FILENAME: "certs/{{ hostname }}.crt"
+          LDAP_TLS_KEY_FILENAME: "keys/{{ hostname }}.key"
+          LDAP_TLS_CA_CRT_FILENAME: "certs/{{ hostname }}.crt"
+        # Remove the 'default' network leaving only the bridge n etwork
+        purge_networks: yes
+        networks_cli_compatible: yes
+        networks:
+          - name: "{{ ldap.network_name }}"
+            ipv4_address: "{{ ldap.ip }}"
+        volumes:
+          - "{{ ldap.var_lib_ldap }}:/var/lib/ldap:rw"
+          - "{{ ldap.etc_ldap_slapd }}:/etc/ldap/slap.d:rw"
+          - "{{ ca_ssl_root }}:/container/service/slapd/assets/certs:rw"
+    - include_vars:
+        file: "seeds.{{ vetzuki_environment }}.json"
+        name: seeds
+    # Give LDAP a moment to start-up
+    - pause: seconds=1
+    # Reset prospects OU
+    - name: Delete prospects
+      when: drop_prospects_ou
+      loop: "{{ seeds.ldap_users }}"
+      loop_control:
+        loop_var: user
+      ldap_entry:
+        dn: "{{ user.dn }}"
+        server_uri: "ldap://localhost:389"
+        bind_dn: "cn=admin,dc={{ vetzuki_environment }},dc=vetzuki,dc=com"
+        bind_pw: "{{ ldap.password }}"
+        state: absent
+    - name: Delete prospects OU in LDAP
+      when: drop_prospects_ou
+      ldap_entry:
+        dn: "ou=prospects,dc={{ vetzuki_environment }},dc=vetzuki,dc=com"
+        server_uri: "ldap://localhost:389"
+        bind_dn: "cn=admin,dc={{ vetzuki_environment }},dc=vetzuki,dc=com"
+        bind_pw: "{{ ldap.password }}"
+        objectClass: organizationalUnit
+        state: absent
+    - name: Create prospects OU in LDAP
+      ldap_entry:
+        dn: "ou=prospects,dc={{ vetzuki_environment }},dc=vetzuki,dc=com"
+        server_uri: "ldap://localhost:389"
+        bind_dn: "cn=admin,dc={{ vetzuki_environment }},dc=vetzuki,dc=com"
+        bind_pw: "{{ ldap.password }}"
+        objectClass: organizationalUnit
+        state: present
+    # Seed LDAP
+    - name: Seed LDAP
+      when: (vetzuki_environment == "poc") or (vetzuki_environment == "development") or (vetzuki_environment == "test")
+      loop: "{{ seeds.ldap_users }}"
+      loop_control:
+        loop_var: user
+      ldap_entry:
+        dn: "{{ user.dn }}"
+        server_uri: "ldap://localhost:389"
+        bind_dn: "cn=admin,dc={{ vetzuki_environment }},dc=vetzuki,dc=com"
+        bind_pw: "{{ ldap.password }}"
+        state: present
+        validate_certs: no
+        attributes:
+          sn: "{{ user.name }}"
+          uid: "{{ user.name }}"
+          uidNumber: "{{ user.id }}"
+          gidNumber: "{{ user.id }}"
+          homeDirectory: "/home/{{ user.name }}"
+          userPassword: "{SSHA}kl3Rflh+pwBeiGedXeAnujozScjjYQaa" # prospect
+          loginShell: "{{ teesh_path }}"
+        objectClass:
+          - organizationalPerson
+          - posixAccount
+    - name: Get local docker GID
+      shell: "grep ^docker /etc/group | cut -d: -f3"
+      register: docker_group
+    - name: Create Groups OU
+      ldap_entry:
+        dn: "ou=groups,dc={{ vetzuki_environment }},dc=vetzuki,dc=com"
+        server_uri: "ldap://localhost:389"
+        bind_dn: "cn=admin,dc={{ vetzuki_environment }},dc=vetzuki,dc=com"
+        bind_pw: "{{ ldap.password }}"
+        objectClass: organizationalUnit
+        state: present
+    - name: Delete docker LDAP group
+      when: drop_prospects_ou
+      ldap_entry:
+        dn: "cn=docker,ou=groups,dc={{ vetzuki_environment }},dc=vetzuki,dc=com"
+        server_uri: "ldap://localhost:389"
+        bind_dn: "cn=admin,dc={{ vetzuki_environment }},dc=vetzuki,dc=com"
+        bind_pw: "{{ ldap.password }}"
+        state: absent
+    - name: Create docker LDAP group
+      ldap_entry:
+        dn: "cn=docker,ou=groups,dc={{ vetzuki_environment }},dc=vetzuki,dc=com"
+        server_uri: "ldap://localhost:389"
+        bind_dn: "cn=admin,dc={{ vetzuki_environment }},dc=vetzuki,dc=com"
+        bind_pw: "{{ ldap.password }}"
+        objectClass: posixGroup
+        attributes:
+# DISABLED: Local groups are not being used on the test system
+          #gidNumber: "{{ docker_group.stdout }}" # 993 on test system
+          gidNumber: 993
+        state: present
+    # Warning: This is a security concern
+    - name: Add LDAP users to docker group
+      when: (vetzuki_environment == "poc") or (vetzuki_environment == "development") or (vetzuki_environment == "test")
+      loop: "{{ seeds.ldap_users }}"
+      loop_control:
+        loop_var: user
+      ldap_attr:
+        server_uri: "ldap://localhost:389"
+        bind_dn: "cn=admin,dc={{ vetzuki_environment }},dc=vetzuki,dc=com"
+        bind_pw: "{{ ldap.password }}"
+        dn: "cn=docker,ou=groups,dc={{ vetzuki_environment }},dc=vetzuki,dc=com"
+        name: memberUid
+        values: "{{ user.name }}"
+        
+# Redis service
+    - docker_container:
+        name: "{{ redis.container.name }}"
+        image: "{{ redis.container.image }}"
+        state: started
+        published_ports: ["6379:6379/tcp"]
+        env: {}
+        networks_cli_compatible: yes
+        networks:
+          - name: "{{ redis.network_name }}"
+            ipv4_address: "{{ redis.ip }}"
+        volumes:
+          - "{{ redis.data }}:/data:rw"
+          # - {{ ldap.certificates }}:/container/service/slapd/assets/certs
+# Database service    
+    - rds_subnet_group:
+        aws_access_key: "{{ rds.aws_access_key }}"
+        aws_secret_key: "{{ rds.aws_secret_key }}"
+        region: "{{ rds.aws_region }}"
+        description: "{{ vetzuki_environment }} db subnet group"
+        name: "db-{{ vetzuki_environment }}-group"
+        state: present
+        subnets:
+          - "{{ subnets[vetzuki_environment].a }}"
+          - "{{ subnets[vetzuki_environment].b }}"
+    - rds:
+        aws_access_key: "{{ rds.aws_access_key }}"
+        aws_secret_key: "{{ rds.aws_secret_key }}"
+        command: create
+        instance_name: "{{ rds.instance_name }}"
+        db_engine: "{{ rds.db_engine }}"
+        size: "{{ rds.size }}"
+        instance_type: "{{ rds.instance_type }}"
+        username: "{{ rds.username }}"
+        password: "{{ rds.password }}"
+        publicly_accessible: no
+        # TODO: Should have well defined security group
+        # allowing all VPC subnets access
+        subnet: "db-{{ vetzuki_environment }}-group"
+        tags: "{{ rds.tags }}"
+        region: "{{ aws_region }}"
+# Security group to allow DB access
+    - ec2_group:
+        aws_access_key: "{{ ec2.aws_access_key }}"
+        aws_secret_key: "{{ ec2.aws_secret_key }}"
+        description: "{{ vetzuki_environment }} db access"
+        name: "db-{{ vetzuki_environment }}"
+        region: "{{ ec2.aws_region }}"
+        vpc_id: "{{ ec2.vpc_id }}"
+        rules:
+          - proto: tcp
+            ports: [5432]
+            cidr_ip: "{{ public_ip }}/32"
+            rule_desc: "Allow Home to DB"
+          - proto: tcp
+            ports: [5432]
+            cidr_ip: "172.16.0.0/23"
+            rule_desc: "Allow VPC to DB"
+# Authorize security group to RDS instance
+# Preferred method is to read:
+#  DBInstances[0].VpcSecurityGroups[0].VpcSecurityGroupId
+# And add PublicIP using the ec2_group Ansible module.
+# The groupID is for an EC2 Security group
+    # - name: Create DB Security group
+    #   command:
+    #     argv:
+    #       - aws
+    #       - rds
+    #       - "create-db-security-group"
+    #       - "--region"
+    #       - "{{ rds.aws_region }}"
+    #       - "--db-security-group-name"
+    #       - "{{ vetzuki_environment }}"
+    #       - "--db-security-group-description"
+    #       - '"{{ vetzuki_environment }}"'
+    #   environment:
+    #     AWS_ACCESS_KEY_ID: "{{ rds.aws_access_key }}"
+    #     AWS_SECRET_ACCESS_KEY: "{{ rds.aws_secret_key }}"
+    #     AWS_REGION: "{{ rds.aws_region }}"
+    # - name: Authorize EC2 security group to DB security group
+    #   command:
+    #     argv:
+    #       - aws
+    #       - rds
+    #       - "authorize-db-security-group-ingress"
+    #       - "--region"
+    #       - "{{ rds.aws_region }}"
+    #       - "--db-security-group-name"
+    #       - "{{ vetzuki_environment }}"
+    #       - "--cidrip"
+    #       - "{{ public_ip }}/32"
+    #       - "--ec2-security-group-name"
+    #       - '"db-{{ vetzuki_environment }}"'
+    #   environment:
+    #     AWS_ACCESS_KEY_ID: "{{ rds.aws_access_key }}"
+    #     AWS_SECRET_ACCESS_KEY: "{{ rds.aws_secret_key }}"
+    #     AWS_REGION: "{{ rds.aws_region }}"
+# Below is unsafe by permission or otherwise
+    - user: name=testuser groups=docker append=yes

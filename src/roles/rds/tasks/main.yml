@@ -1,0 +1,33 @@
+- name: Gather RDS connection information
+  command: 
+    argv:
+      - aws
+      - rds
+      - describe-db-instances
+      - --region
+      - "{{ rds.aws_region }}"
+      # - "--query 'DBInstances[*]'"
+  register: aws_output
+  environment:
+    AWS_ACCESS_KEY_ID: "{{ rds.aws_access_key }}"
+    AWS_SECRET_ACCESS_KEY: "{{ rds.aws_secret_key }}"
+    AWS_REGION: "{{ rds.aws_region }}"
+- set_fact:
+    rds_instances: "{{ aws_output.stdout | from_json }}"
+- set_fact:
+    db_host: "{{ rds_instances.DBInstances[0].Endpoint.Address }}"
+    db_port: "{{ rds_instances.DBInstances[0].Endpoint.Port }}"
+    db_user: "{{ rds.username }}"
+    db_password: "{{ rds.password }}"
+    db_name: "{{ rds.database }}"
+- set_fact:
+    db:
+      host: "{{ db_host }}"
+      port: "{{ db_port }}"
+      user: "{{ db_user }}"
+      username: "{{ db_user }}"
+      password: "{{ db_password }}"
+      name: "{{ db_name }}"
+      database: "{{ db_name }}"
+- debug:
+    msg: "Postgres URL: postgres://{{ db_host}}:{{ db_port }}"

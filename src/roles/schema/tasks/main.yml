@@ -1,0 +1,166 @@
+- debug:
+    msg: "configuring schema for {{ vetzuki_environment }}"
+- name: Include RDS database vars
+  when: vetzuki_environment == "poc"
+  include_role:
+    name: rds
+- pip: name=psycopg2-binary extra_args="--user"
+- name: Drop vetzuki database
+  when: db_reset
+  postgresql_db:
+    name: vetzuki
+    login_host: "{{ db.host }}"
+    port: "{{ db.port }}"
+    login_user: "{{ db.username }}"
+    login_password: "{{ db.password }}"
+    state: absent
+
+- name: Create vetzuki database
+  postgresql_db:
+    name: vetzuki
+    login_host: "{{ db.host }}"
+    port: "{{ db.port }}"
+    login_user: "{{ db.username }}"
+    login_password: "{{ db.password }}"
+- name: Truncate tables
+  when: db_seed and not db_reset
+  loop: "{{ tables }}"
+  loop_control:
+    loop_var: table
+  postgresql_query:
+    login_host: "{{ db.host }}"
+    port: "{{ db.port }}"
+    login_user: "{{ db.username }}"
+    login_password: "{{ db.password }}"
+    db: vetzuki
+    query: |
+      TRUNCATE TABLE {{ table.name }} CASCADE
+- name: Create tables
+  loop: "{{ tables }}"
+  loop_control:
+    loop_var: table
+  postgresql_table:
+    login_host: "{{ db.host }}"
+    port: "{{ db.port }}"
+    login_user: "{{ db.username }}"
+    login_password: "{{ db.password }}"
+    db: vetzuki
+    name: "{{ table.name }}"
+    state: present
+    columns: "{{ table.columns }}"
+# Create trigger to update modified timestamp on row updates
+- name: Create set timestamp trigger
+  when: db_reset
+  postgresql_query:
+    login_host: "{{ db.host }}"
+    port: "{{ db.port }}"
+    login_user: "{{ db.username }}"
+    login_password: "{{ db.password }}"
+    db: vetzuki
+    path_to_script: "{{ ansible_env.PWD }}/{{ db.triggers.update_timestamp }}"
+- name: Attach set timestamp trigger
+  # when: db_reset
+  loop: "{{ tables }}"
+  loop_control:
+    loop_var: table
+  postgresql_query:
+    login_host: "{{ db.host }}"
+    port: "{{ db.port }}"
+    login_user: "{{ db.username }}"
+    login_password: "{{ db.password }}"
+    db: vetzuki
+    query: >
+      DO $$ BEGIN
+
+      CREATE TRIGGER set_timestamp
+      BEFORE UPDATE ON {{ table.name }}
+      FOR EACH ROW
+      EXECUTE PROCEDURE trigger_set_timestamp();
+
+      EXCEPTION
+        WHEN others THEN null;
+      END $$;
+        
+
+- name: Seed employers
+  when: db_seed
+  loop: "{{ seeds.employer }}"
+  loop_control:
+    loop_var: employer
+  postgresql_query:
+    login_host: "{{ db.host }}"
+    port: "{{ db.port }}"
+    login_user: "{{ db.username }}"
+    login_password: "{{ db.password }}"
+    db: vetzuki
+    query: |
+      INSERT INTO employer (name, email, billing_email, billing_state)
+      VALUES (%s, %s, %s, %s)
+    positional_args:
+      - "{{ employer.name }}"
+      - "{{ employer.email }}"
+      - "{{ employer.billing_email }}"
+      - "{{ employer.billing_state }}"
+- name: Seed exams
+  when: db_seed
+  loop: "{{ seeds.exam }}"
+  loop_control:
+    loop_var: exam
+  postgresql_query:
+    login_host: "{{ db.host }}"
+    port: "{{ db.port }}"
+    login_user: "{{ db.username }}"
+    login_password: "{{ db.password }}"
+    db: vetzuki
+    query: "insert into exam (name, description) values(%s, %s)"
+    positional_args:
+      - "{{ exam.name }}"
+      - "{{ exam.description }}"
+- name: Seed employer exams
+  when: db_seed
+  loop: "{{ seeds.employer_exam }}"
+  loop_control:
+    loop_var: employer_exam
+  postgresql_query:
+    login_host: "{{ db.host }}"
+    port: "{{ db.port }}"
+    login_user: "{{ db.username }}"
+    login_password: "{{ db.password }}"
+    db: vetzuki
+    query: "insert into employer_exam (exam_id, employer_id) values(%s, %s)"
+    positional_args:
+      - "{{ employer_exam.exam_id }}"
+      - "{{ employer_exam.employer_id }}"
+- name: Seed prospects
+  when: db_seed
+  loop: "{{ seeds.prospect }}"
+  loop_control:
+    loop_var: prospect
+  postgresql_query:
+    login_host: "{{ db.host }}"
+    port: "{{ db.port }}"
+    login_user: "{{ db.username }}"
+    login_password: "{{ db.password }}"
+    db: vetzuki
+    query: "insert into prospect (name, email, url, role, screening_state, employer_name, employer_id, employer_exam_id) values(%s, %s, %s, %s, %s, %s, %s, %s)"
+    positional_args:
+      - "{{ prospect.name }}"
+      - "{{ prospect.email }}"
+      - "{{ prospect.url }}"
+      - "{{ prospect.role }}"
+      - "{{ prospect.screening_state }}"
+      - "{{ prospect.employer_name }}"
+      - "{{ prospect.employer_id }}"
+      - "{{ prospect.employer_exam_id }}"
+- name: Create .env file
+  when: vetzuki_environment == "development"
+  copy:
+    dest: "{{ vetzuki_project_root }}/.env.{{ vetzuki_environment }}"
+    content: |
+      LDAP_HOST=localhost:389
+      DB_HOST={{ db.host }}
+      DB_PORT={{ db.port }}
+      DB_NAME={{ db.database }}
+      DB_USERNAME={{ db.username }}
+      DB_PASSWORD={{ db.password }}
+      VETZUKI_ENVIRONMENT={{ vetzuki_environment }}

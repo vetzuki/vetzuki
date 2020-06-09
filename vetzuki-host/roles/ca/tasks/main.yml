@@ -1,0 +1,44 @@
+- pip: name=pyOpenSSL
+- name: Create CA SSL root
+  loop: ["/certs", "/keys", "/csrs"]
+  file:
+    state: directory
+    path: "{{ ca_ssl_root }}/{{ item }}"
+
+- name: Create key
+  openssl_privatekey:
+    path: "{{ ca_ssl_root }}/keys/{{ hostname }}.key"
+
+- name: Create CSR
+  openssl_csr:
+    path: "{{ ca_ssl_root }}/csrs/{{ hostname }}.csr"
+    privatekey_path: "{{ ca_ssl_root }}/keys/{{ hostname }}.key"
+    common_name: "{{ hostname }}.{{ vetzuki_environment }}.vetzuki.com"
+    organization_name: Vetzuki
+    organizational_unit_name: "{{ vetzuki_environment }}"
+    country_name: US
+    key_usage:
+      - digitalSignature
+      - keyEncipherment
+    key_usage_critical: yes
+    # Allow certificate to be used on the server or client
+    extended_key_usage:
+      - serverAuth
+      - clientAuth
+    subject_alt_name: "{{ csr_sans }}"
+
+- name: SelfSign CSR
+  openssl_certificate:
+    path: "{{ ca_ssl_root }}/certs/{{ hostname }}.crt"
+    privatekey_path: "{{ ca_ssl_root }}/keys/{{ hostname }}.key"
+    csr_path: "{{ ca_ssl_root }}/csrs/{{ hostname }}.csr"
+    provider: selfsigned
+    key_usage:
+      - digitalSignature
+      - keyEncipherment
+    key_usage_strict: yes
+    # Allow certificate to be used on the server or client
+    extended_key_usage:
+      - serverAuth
+      - clientAuth
+    subject_alt_name: "{{ sans_list }}"

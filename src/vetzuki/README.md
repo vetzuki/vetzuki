@@ -1,14 +1,19 @@
 ## Environment Setup
 
-From the project root, use ansible:
+From the parent directory, use Ansible
 
 ```
 ansible-playbook setup_development_environment.yml
 ```
 
+This will create the LDAP, Redis, and Postgres containers. It will also seed the LDAP database using data in `seeds.$ENV.json`.
+
+LDAP testing makes use of the `seeds.$ENV.json` file.
+
 ### Database
 
-To provision the schema
+To provision the schema use the Ansible playbooks in the praent directory.
+
 ```
 ansible-playbook schema.yml
 ```

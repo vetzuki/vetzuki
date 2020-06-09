@@ -65,6 +65,249 @@ func Connect() {
 	}
 }
 
+// CreateOrganization : Create an organization
+func CreateOrganization(name string) (*Organization, bool) {
+	log.Printf("debug: creating organization %s", name)
+	organization := &Organization{
+		Name: name,
+	}
+	err := connection.QueryRow(`
+	INSERT INTO organization
+	(name)
+	VALUES ($1)
+	RETURNING id, created, modified`, name,
+	).Scan(&organization.ID, &organization.Created, &organization.Modified)
+
+	if err != nil {
+		log.Printf("error: failed to create organization %s: %s", name, err)
+		return nil, false
+	}
+	return organization, true
+}
+
+// CreateOrganizationalRole : Create a organizational role
+func CreateOrganizationalRole(employer *Employer, organization *Organization, role int) (*OrganizationalRole, bool) {
+	log.Printf("debug: creating the organizational role %d in %s for %s",
+		role,
+		organization.Name,
+		employer.Email)
+	orgRole := &OrganizationalRole{
+		EmployerID:     employer.ID,
+		OrganizationID: organization.ID,
+		Role:           role,
+	}
+	err := connection.QueryRow(`
+	INSERT INTO organizational_role
+	(employer_id, organization_id, role)
+	VALUES ($1, $2, $3)
+	RETURNING created, modified`,
+		employer.ID,
+		organization.ID,
+		role,
+	).Scan(
+		&orgRole.Created,
+		&orgRole.Modified,
+	)
+	if err != nil {
+		log.Printf("error: failed to create org role %d for %s in %s: %s",
+			role,
+			employer.Name,
+			organization.Name,
+			err)
+		return nil, false
+	}
+	return orgRole, true
+}
+
+// CreateEmployer : Create an employer
+func CreateEmployer(name, email string) (*Employer, bool) {
+	log.Printf("debug: creating employer %s", email)
+	employer := &Employer{
+		Name:  name,
+		Email: email,
+	}
+	err := connection.QueryRow(`
+	INSERT INTO employer
+	(name, email)
+	VALUES ($1, $2)
+	RETURNING id, created, modified`,
+	).Scan(
+		employer.ID,
+		employer.Created,
+		employer.Modified,
+	)
+	if err != nil {
+		log.Printf("error: failed to create employer %s: %s", email, err)
+		return nil, false
+	}
+	return employer, true
+}
+
+// FindEmployerByEmail : Find an employer by email
+func FindEmployerByEmail(email string) ([]*Employer, bool) {
+	log.Printf("debug: finding employer %s", email)
+	rows, err := connection.Query(`
+	SELECT id, name, email, organization_id, created, modified
+	FROM employer
+	WHERE email = $1`, email)
+	if err != nil {
+		log.Printf("error: failed to find employer %s: %s", email, err)
+		return nil, false
+	}
+	defer rows.Close()
+	// TODO: implement sql.Scanner : Employer.Scan(interface{}) error
+	members := []*Employer{}
+	for rows.Next() {
+		e := &Employer{}
+		err := rows.Scan(
+			&e.ID,
+			&e.Name,
+			&e.Email,
+			&e.OrganizationID,
+			&e.Created,
+			&e.Modified,
+		)
+		if err != nil {
+			log.Printf("error: failed to scan to employer: %s", err)
+		}
+	}
+	return members, true
+}
+
+// GetMembers : Get all employers of an organization
+func (o *Organization) GetMembers() ([]*Employer, bool) {
+	log.Printf("debug: getting members of %s", o.Name)
+	rows, err := connection.Query(`
+	SELECT id, name, email, organization_id, created, modified
+	FROM organization
+	WHERE organization_id = $1`)
+	if err != nil {
+		log.Printf("error: failed to find members of %s: %s", o.Name, err)
+		return nil, false
+	}
+	defer rows.Close()
+	members := []*Employer{}
+	for rows.Next() {
+		e := &Employer{}
+		err := rows.Scan(
+			&e.ID,
+			&e.Name,
+			&e.Email,
+			&e.OrganizationID,
+			&e.Created,
+			&e.Modified,
+		)
+		if err != nil {
+			log.Printf("error: failed to scan to employer: %s", err)
+		}
+	}
+	return members, true
+}
+
+// FindOrganizationByName : Find an organization by name
+func FindOrganizationByName(name string) ([]*Organization, bool) {
+	log.Printf("debug: finding employers named %s", name)
+	rows, err := connection.Query(`
+	SELECT id, name, created, modified
+	FROM organization
+	WHERE name = $1`, name)
+	if err != nil {
+		log.Printf("error: failed to find organizations named %s: %s", name, err)
+		return nil, false
+	}
+	defer rows.Close()
+
+	organizations := []*Organization{}
+	for rows.Next() {
+		org := &Organization{}
+		err := rows.Scan(
+			&org.ID,
+			&org.Name,
+			&org.Created,
+			&org.Modified,
+		)
+		if err != nil {
+			log.Printf("error: unable to cast row data to organization: %s", err)
+			return nil, false
+		}
+	}
+	return organizations, true
+}
+
+// GetRole : Get the role of an employee in their organization
+func (e *Employer) GetRole() (*OrganizationalRole, bool) {
+	log.Printf("debug: finding organization for %s", e.Email)
+	rows, err := connection.Query(`
+	SELECT employer_id, organization_id, role, created, modified
+	FROM organization_role
+	WHERE employer_id = $1 and organization_id = $2`,
+		e.ID,
+		e.OrganizationID,
+	)
+	if err != nil {
+		log.Printf("error: faild to find role for %s: %s", e.Email, err)
+		return nil, false
+	}
+	orgRole := &OrganizationalRole{}
+	counter := 1
+	for rows.Next() {
+		if counter == 1 {
+			err := rows.Scan(
+				&orgRole.EmployerID,
+				&orgRole.OrganizationID,
+				&orgRole.Role,
+				&orgRole.Created,
+				&orgRole.Modified,
+			)
+			if err != nil {
+				log.Printf("error: unable to restore organizational role for %s: %s",
+					e.Email, err)
+			}
+		}
+		counter++
+	}
+	if counter > 1 {
+		log.Printf("warning: more than one role was found for %s in orgID %d",
+			e.Email,
+			e.OrganizationID)
+	}
+	return orgRole, false
+}
+
+// GetOrganization : Get an organization by ID
+func GetOrganization(id int) (*Organization, bool) {
+	log.Printf("debug: finding organization %d", id)
+	rows, err := connection.Query(`
+	SELECT id, name, created, modified
+	FROM organization
+	WHERE id = $1`, id)
+	if err != nil {
+		log.Printf("error: failed to find organization %d: %s", id, err)
+		return nil, false
+	}
+	counter := 1
+	org := &Organization{}
+	for rows.Next() {
+		if counter == 1 {
+			err := rows.Scan(
+				&org.ID,
+				&org.Name,
+				&org.Created,
+				&org.Modified,
+			)
+			if err != nil {
+				log.Printf("error: failed to scan organization %d: %s", id, err)
+				return nil, false
+			}
+		}
+		counter++
+	}
+	if counter > 1 {
+		log.Printf("warning: found %d matches for organization %d", counter, id)
+	}
+	return org, true
+}
+
 // CreateEmployerProspect : Create an EmployerExam, Prospect, and LDAP user
 func CreateEmployerProspect(employerID, examID int64, name, email, role string) (*EmployerProspect, bool) {
 	employer, ok := findEmployerByID(employerID)
@@ -525,6 +768,23 @@ type VetzukiLog struct {
 	Modified   time.Time `sql:"modified" json:"modified"`
 }
 
+// Organization : Container of Employers
+type Organization struct {
+	ID       int64     `sql:"id" json:"id"`
+	Name     string    `sql:"name" json:"name"`
+	Created  time.Time `sql:"created" json:"created"`
+	Modified time.Time `sql:"modified" json:"modified"`
+}
+
+// OrganizationalRole : Role of Employer in Organization
+type OrganizationalRole struct {
+	EmployerID     int64     `sql:"employer_id" json:"employerID"`
+	OrganizationID int64     `sql:"organization_id" json:"organizationID"`
+	Role           int       `sql:"role" json:"role"`
+	Created        time.Time `sql:"created" json:"created"`
+	Modified       time.Time `sql:"modified" json:"modified"`
+}
+
 // ProspectScore : Result of a scoring
 type ProspectScore struct {
 	ID            int64     `sql:"id" json:"id"`
@@ -550,14 +810,15 @@ type ProspectWithScore struct {
 
 // Employer : An employer can hire prospects
 type Employer struct {
-	ID           int64     `sql:"id" json:"id"`
-	Created      time.Time `sql:"created" json:"created"`
-	Modified     time.Time `sql:"modified" json:"modified"`
-	Name         string    `sql:"name" json:"name"`
-	Email        string    `sql:"email" json:"email"`
-	BillingEmail string    `sql:"billing_email" json:"billingEmail"`
-	BillingID    int64     `sql:"billing_id" json:"billingID"`
-	BillingState int       `sql:"billing_state" json:"billingState"`
+	ID             int64     `sql:"id" json:"id"`
+	Created        time.Time `sql:"created" json:"created"`
+	Modified       time.Time `sql:"modified" json:"modified"`
+	Name           string    `sql:"name" json:"name"`
+	Email          string    `sql:"email" json:"email"`
+	BillingEmail   string    `sql:"billing_email" json:"billingEmail"`
+	BillingID      int64     `sql:"billing_id" json:"billingID"`
+	BillingState   int       `sql:"billing_state" json:"billingState"`
+	OrganizationID int64     `sql:"organization_id" json:"organizationID"`
 }
 
 // Exam : An exam describes a type of exam for a prospect

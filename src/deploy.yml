@@ -1,0 +1,158 @@
+- name: Create API environment
+  hosts: localhost
+  vars:
+    vetzuki_environment: poc
+    aws_region: us-west-2
+    acm_certificate:
+      poc: "arn:aws:acm:us-west-2:588487667149:certificate/386fb057-de18-4135-a7bc-39683688a66a"
+    deployer:
+      access_key: "{{aws_access_key}}"
+      secret_key: "{{aws_secret_key}}"
+    adminWhitelist:
+      - mcmoranbjr@gmail.com
+    lambdas:
+      - createProspect
+      - createScore
+      - createProspectNetwork
+      - getProspect
+      - getProspects
+      - getProspectScore
+      - getProspectScores
+      - employerLogin
+      - updateExamState
+    route53:
+      zone_id: Z1OB74QXG8UN05
+    teesh:
+      apiKey: "aaac6aa8f10906d9acd8a03187ac5ed6ff6dde7bf6b703cc8227f81725399774"
+    vpc:
+      poc: "vpc-0e6c846881215aff9"
+    ldap:
+      development:
+        host: "localhost:389"
+        bind_dn: "cn=admin,dc={{ vetzuki_environment }},dc=vetzuki,dc=com"
+        base_dn: "ou=prospects,dc={{ vetzuki_environment }},dc=vetzuki,dc=com"
+        groups_dn: "ou=groups,dc={{ vetzuki_environment }},dc=vetzuki,dc=com"
+        bind_password: "{{ vetzuki_environment }}"
+      poc:
+        host: "172.16.0.100:389"
+        bind_dn: "cn=admin,dc={{ vetzuki_environment }},dc=vetzuki,dc=com"
+        base_dn: "ou=prospects,dc={{ vetzuki_environment }},dc=vetzuki,dc=com"
+        groups_dn: "ou=groups,dc={{ vetzuki_environment }},dc=vetzuki,dc=com"
+        bind_password: "{{ ldap_password }}"
+    redis:
+      development:
+        host: "localhost:6379"
+        password: ""
+        db: ""
+      poc:
+        host: "172.16.0.100:6379"
+        password: ""
+        db: ""
+    # Grants access to RDS for members of the group
+    # plus the subnets of the primary VPC
+    db_security_group:
+      poc: "sg-013a87f09a9a2cf14"
+    public_ip: "71.204.152.97"
+    subnets:
+      poc:
+        public:
+          cidr: "172.16.0.0/24"
+          az: "us-west-2a"
+        a:
+          cidr: "172.16.1.0/24"
+          az: "us-west-2c"
+        b:
+          cidr: "172.16.2.0/24"
+          az: "us-west-2d"
+    subnet:
+      poc:
+        public: "subnet-028bcbeafe9d69115"
+        a: "subnet-028bcbeafe9d69115"
+        b: "subnet-031837afae45ee3b8"
+    internet_gateway:
+      poc: "igw-002a4d598c7c90567"
+    route_table:
+      poc: "rtb-02838a73b97aedf24"
+  tasks:
+# Build
+    - name: Install dependencies
+      become: yes
+      apt: name=zip state=latest
+    - name: Install boto3
+      pip:
+        name: boto3
+        extra_args: "--user"
+    
+    - name: Set DB environment variables
+      include_role:
+        name: rds
+       
+    - name: Create API Gateway policy document
+      template:
+        src: "{{ vetzuki_environment }}.api_gateway.policy.j2"
+        dest: "{{ vetzuki_environment }}.api_gateway.policy"
+
+    - name: Create deployment descriptors
+      loop: ["api_gateway", "iam", "lambdas", "route53", "network", "storage"]
+      template:
+        src: "{{ item }}.tf.j2"
+        dest: "{{ item }}.tf"
+
+    - name: Building lambdas
+      loop: "{{ lambdas }}"
+      loop_control:
+        loop_var: lambdaName
+      make:
+        chdir: "{{ ansible_env.PWD }}/{{ lambdaName }}"
+    # UI
+    - name: Building UI
+      make:
+        chdir: "{{ ansible_env.PWD }}/ui/vetzuki"
+    - name: Getting JS files listing
+      command: "ls {{ ansible_env.PWD }}/ui/vetzuki/dist/js"
+      register: js_listing
+
+    - name: Getting CSS files listing
+      command: "ls {{ ansible_env.PWD }}/ui/vetzuki/dist/css"
+      register: css_listing
+    
+    - set_fact:
+        js_files: "{{ js_listing.stdout.split('\n') }}"
+        css_files: "{{ css_listing.stdout.split('\n') }}"
+
+# Deploy
+    - name: Initialize terraform
+      command: "terraform init"
+    - name: Validate deployment environment
+      command: "terraform validate"
+    - name: "Deploying to {{ vetzuki_environment }}"
+      command: "terraform apply -auto-approve"
+    # UI
+    - name: Deploy JS resources
+      loop: "{{ js_files }}"
+      aws_s3:
+        aws_access_key: "{{ deployer.access_key }}"
+        aws_secret_key: "{{ deployer.secret_key }}"
+        bucket: "www.{{ vetzuki_environment }}.vetzuki.com"
+        object: "/js/{{ item }}"
+        src: "{{ ansible_env.PWD }}/ui/vetzuki/dist/js/{{ item }}"
+        mode: put
+    - name: Deploy CSS resources
+      loop: "{{ css_files }}"
+      aws_s3:
+        aws_access_key: "{{ deployer.access_key }}"
+        aws_secret_key: "{{ deployer.secret_key }}"
+        bucket: "www.{{ vetzuki_environment }}.vetzuki.com"
+        object: "/css/{{ item }}"
+        src: "{{ ansible_env.PWD }}/ui/vetzuki/dist/css/{{ item }}"
+        mode: put
+    - name: Deploy site resources
+      loop: ["index.html", "favicon.ico"]
+      aws_s3:
+        aws_access_key: "{{ deployer.access_key }}"
+        aws_secret_key: "{{ deployer.secret_key }}"
+        bucket: "www.{{ vetzuki_environment }}.vetzuki.com"
+        object: "/{{ item }}"
+        src: "{{ ansible_env.PWD }}/ui/vetzuki/dist/{{ item }}"
+        mode: put
+      
